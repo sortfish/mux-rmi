@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import org.slf4j.Logger;
@@ -37,7 +38,8 @@ import easyrmi.Statistics.Value;
 public class RemoteServer implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(RemoteServer.class);
 
-  private final ExecutorService executor = Executors.newCachedThreadPool();
+  private final ThreadFactory threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(getClass().getCanonicalName()).build();
+  private final ExecutorService executor = Executors.newCachedThreadPool(threadFactory);
   private final Set<Service> services = new HashSet<>();
   private final Registry registry = new Registry();
   private final KeepAlive keepAlive;
@@ -331,7 +333,9 @@ public class RemoteServer implements AutoCloseable {
       try {
         protocol.run();
       } catch (final Exception e) {
-        logger.error("Error in remote request", e); //$NON-NLS-1$
+        if (!protocol.isClosed()) {
+          logger.error("{} Error in remote request: {}", this, logger.isDebugEnabled() ? e : e.toString()); //$NON-NLS-1$
+        }
       } finally {
         close();
       }

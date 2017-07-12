@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import org.slf4j.Logger;
@@ -30,27 +31,26 @@ class KeepAlive implements AutoCloseable {
 
 
   private final Map<Object, Task> tasks = new HashMap<>();
+  private final ThreadFactory threadFactory;
   private final ScheduledExecutorService scheduler;
 
   private final Statistics stats = new Statistics();
 
   static class Settings extends ConfigurationSettings.FromSystemProperties {
-    static final String KEEP_ALIVE_PREFIX = KeepAlive.class.getPackage().getName() + ".keep-alive."; //$NON-NLS-1$
+    static final String KEEP_ALIVE_PREFIX = KeepAlive.class.getPackage().getName() + ".keep-alive.";
 
-    final LongValue intervalSec;
-    final LongValue marginSec;
-    final LongValue pollIntervalSec;
+    final LongValue intervalSec = new LongValue("interval", 10);
+    final LongValue marginSec = new LongValue("margin", 1);
+    final LongValue pollIntervalSec = new LongValue("poll-interval", 1);
 
     Settings() {
       super(KEEP_ALIVE_PREFIX);
-      this.intervalSec = new LongValue("interval", 10); //$NON-NLS-1$
-      this.marginSec = new LongValue("margin", 1); //$NON-NLS-1$
-      this.pollIntervalSec = new LongValue("poll-interval", 1); //$NON-NLS-1$
+      reload();
     }
 
     @Override
     public String toString() {
-      return String.format("%ss, %ss, %ss", intervalSec, marginSec, pollIntervalSec); //$NON-NLS-1$
+      return String.format("%ss, %ss, %ss", intervalSec, marginSec, pollIntervalSec);
     }
   }
 
@@ -62,7 +62,8 @@ class KeepAlive implements AutoCloseable {
    * Create a new keep-alive handler instance.
    */
   KeepAlive(final Settings settings) {
-    this.scheduler = Executors.newScheduledThreadPool(1);
+    this.threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(getClass().getCanonicalName()).build();
+    this.scheduler = Executors.newScheduledThreadPool(1, threadFactory);
     this.settings = settings;
   }
 
@@ -70,7 +71,7 @@ class KeepAlive implements AutoCloseable {
    * Statistics for a keep-alive handler.
    */
   final class Statistics {
-    final Value threadCount = new Value(KeepAlive.class, "thread-count") { //$NON-NLS-1$
+    final Value threadCount = new Value(KeepAlive.class, "thread-count") {
       @Override
       protected int get() {
         if (scheduler instanceof ThreadPoolExecutor) {
@@ -80,7 +81,7 @@ class KeepAlive implements AutoCloseable {
       }
     };
 
-    final Counter taskCount = new Counter(KeepAlive.class, "task-count"); //$NON-NLS-1$
+    final Counter taskCount = new Counter(KeepAlive.class, "task-count");
   }
 
   /**
@@ -141,7 +142,7 @@ class KeepAlive implements AutoCloseable {
 
   @Override
   public String toString() {
-    return "KeepAlive [" + settings + "]"; //$NON-NLS-1$ //$NON-NLS-2$
+    return "KeepAlive [" + settings + "]";
   }
 
   /** {@inheritDoc} */
@@ -153,12 +154,12 @@ class KeepAlive implements AutoCloseable {
   final class Task implements Runnable, Closeable {
     final Protocol protocol;
 
-    boolean closed = false;
+    volatile boolean closed = false;
 
     private Task(final Protocol protocol) {
       this.protocol = protocol;
 
-      if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive created: {}", settings); //$NON-NLS-1$
+      if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive created: {}", settings);
     }
 
     private long getElapsedMillis(final long lastUpdateMillis) {
@@ -174,7 +175,7 @@ class KeepAlive implements AutoCloseable {
       if (closed) {
         return;
       }
-      if (logger.isTraceEnabled()) logger.trace(protocol + " Connection keep-alive started"); //$NON-NLS-1$
+      if (logger.isTraceEnabled()) logger.trace(protocol + " Connection keep-alive started");
 
       stats.threadCount.update();
 
@@ -187,9 +188,11 @@ class KeepAlive implements AutoCloseable {
         switch (state) {
           case ACCEPT:
             final long elapsedMillis = getElapsedMillis(sharedState.lastUpdateMillis);
-            if (elapsedMillis > SECONDS.toMillis(settings.intervalSec.get() + settings.marginSec.get())) {
-              if (logger.isErrorEnabled()) logger.error(protocol + " Connection keep-alive margin exceeded"); //$NON-NLS-1$
-              protocol.disconnect();
+            final long intervalWithMarginMillis = SECONDS.toMillis(settings.intervalSec.get() + settings.marginSec.get());
+          if (elapsedMillis > intervalWithMarginMillis) {
+              if (logger.isWarnEnabled()) logger.warn(protocol + " Connection keep-alive margin exceeded: {}ms > {}ms",
+                  elapsedMillis, intervalWithMarginMillis);
+              protocol.close();
               reschedule = false;
             }
             break;
@@ -206,20 +209,18 @@ class KeepAlive implements AutoCloseable {
 
           case CLOSED:
           default:
-            if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive stopped"); //$NON-NLS-1$
+            if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive stopped");
             return;
         }
       } catch (final Exception e) {
-        if (logger.isDebugEnabled()) {
-          logger.error(protocol + " Connection keep-alive failed", e); //$NON-NLS-1$
-        } else {
-          logger.error(protocol + " Connection keep-alive failed: " + e.getMessage()); //$NON-NLS-1$
+        if (!protocol.isClosed()) {
+          logger.error(protocol + " Connection keep-alive failed: {}", logger.isDebugEnabled() ? e : e.toString());
         }
         reschedule = false;
       }
       if (reschedule && !scheduler.isShutdown()) {
         scheduler.schedule(this, rescheduleMillis, MILLISECONDS);
-        if (logger.isTraceEnabled()) logger.trace(protocol + " Connection keep-alive rescheduled in {}ms ({})", rescheduleMillis, state); //$NON-NLS-1$
+        if (logger.isTraceEnabled()) logger.trace(protocol + " Connection keep-alive rescheduled in {}ms ({})", rescheduleMillis, state);
       } else {
         close();
       }
@@ -231,7 +232,7 @@ class KeepAlive implements AutoCloseable {
         closed = true;
         stats.taskCount.dec();
       }
-      if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive closed"); //$NON-NLS-1$
+      if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive closed");
     }
 
     @Override

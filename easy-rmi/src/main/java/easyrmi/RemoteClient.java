@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
 
 import javax.net.SocketFactory;
 
@@ -99,7 +100,7 @@ public class RemoteClient implements AutoCloseable {
    * @return a proxy stub for the remote API.
    * @throws NotBoundException if the remote API is not registered on the server.
    * @throws IllegalArgumentException if the API class type is not an interface.
-   * @throws Exception if an excecption is thrown while performing this request.
+   * @throws Exception if an exception is thrown while performing this request.
    */
   public <API> API connect(final Class<API> apiClass)
       throws NotBoundException, IllegalArgumentException, Exception {
@@ -114,6 +115,7 @@ public class RemoteClient implements AutoCloseable {
   /** {@inheritDoc} */
   @Override
   public void close() {
+    keepAlive.close();
     connections.close();
   }
 
@@ -260,7 +262,8 @@ public class RemoteClient implements AutoCloseable {
     private final Set<Connection> connections = Collections.synchronizedSet(new HashSet<Connection>());
     private final NavigableMap<Long, Connection> connectionPool = new ConcurrentSkipListMap<>();
 
-    private final ScheduledExecutorService connectionPoolExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ThreadFactory threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(getClass().getCanonicalName()).build();
+    private final ScheduledExecutorService connectionPoolExecutor = Executors.newSingleThreadScheduledExecutor(threadFactory);
 
     private class ConnectionPoolCleanup implements Runnable, Closeable {
       static final long CONNECTION_POOL_LIFETIME = 60;
@@ -389,7 +392,7 @@ public class RemoteClient implements AutoCloseable {
 
     @Override
     public String toString() {
-      return "Connection [protocol=" + protocol + "]"; //$NON-NLS-1$ //$NON-NLS-2$
+      return "RemoteClient.Connection [" + protocol + "]"; //$NON-NLS-1$ //$NON-NLS-2$
     }
   }
 }

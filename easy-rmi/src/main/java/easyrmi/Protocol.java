@@ -38,7 +38,7 @@ public final class Protocol implements AutoCloseable {
   // Shared state between nested protocol instances.
   static class SharedState {
     volatile State state = INITIAL;
-    volatile long lastUpdateMillis;
+    volatile long lastUpdateMillis = System.currentTimeMillis();
 
     void update(final State newState) {
       state = newState;
@@ -76,6 +76,8 @@ public final class Protocol implements AutoCloseable {
   private final Context ctx;
   private final boolean isServer;
   private final boolean topLevel;
+  
+  private volatile boolean isClosed = false;
 
   private Protocol(final Context parentContext) {
     this.ctx = new Context(parentContext);
@@ -265,11 +267,21 @@ public final class Protocol implements AutoCloseable {
   }
 
   /**
+   * @return {@code true} iff {@link #close()} has been called, {@code false} otherwise. 
+   */
+  boolean isClosed() {
+    return isClosed;
+  }
+  
+  /**
    * Close this protocol instance and release all network resources - but only if we're a top-level instance.
    */
   @Override
   public synchronized void close() {
+    if (isClosed) return;
+    
     logger.debug("{} Closed", this); //$NON-NLS-1$
+    isClosed = true;
     if (topLevel) {
       try {
         if (isConnected()) {
@@ -535,7 +547,7 @@ public final class Protocol implements AutoCloseable {
             return command;
         }
       } catch (final Exception e) {
-        handleError(e);
+        handleError(e, isServer);
       }
     } while (true);
   }
@@ -604,12 +616,13 @@ public final class Protocol implements AutoCloseable {
    * @throws Exception the error if it should be re-thrown locally, or any other exception that occurred while handling the
    *                   exception.
    */
-  private void handleError(final Exception e) throws Exception {
-    if (isServer) {
+  private void handleError(final Exception e, final boolean handleRemotely) throws Exception {
+    if (handleRemotely) {
       try {
         write(Command.ERROR, e);
       } catch (final Exception e2) {
-        if (logger.isErrorEnabled()) logger.error(this + " Error sending ERROR response: " + e, e2); //$NON-NLS-1$
+        if (logger.isErrorEnabled()) logger.error("{} Error sending ERROR response ({}): {}", this, e,
+            (logger.isDebugEnabled()) ? e2 : e2.toString()); //$NON-NLS-1$
         throw e2;
       }
     } else {
@@ -634,7 +647,11 @@ public final class Protocol implements AutoCloseable {
    */
   private void handleCall() throws Exception {
     final MethodRef methodRef = (MethodRef) readObject();
-    sendResult(invokeLocal(incomingCall(methodRef)));
+    try {
+      sendResult(invokeLocal(incomingCall(methodRef)));
+    } catch (final Exception e) {
+      handleError(e, true);
+    }
   }
 
   /**
