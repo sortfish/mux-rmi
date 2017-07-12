@@ -296,12 +296,18 @@ public abstract class ConfigurationSettings {
           if (newValue != null) {
             image.set(stringValue);
             set(newValue);
+            if (logger.isTraceEnabled()) logger.trace("Read new value for setting '{}': '{}'", name, newValue);
             return value.get();
+          } else {
+            if (logger.isTraceEnabled()) logger.trace("Failed to read new value for setting '{}': '{}'", name, stringValue);
           }
+        } else {
+          if (logger.isTraceEnabled()) logger.trace("Keeping existing value for setting '{}': '{}'", name, image.get());
         }
       } else {
         image.set(null);
         set(defaultValue);
+        if (logger.isTraceEnabled()) logger.trace("Reverting to default value for setting '{}': '{}'", name, defaultValue);
       }
       return null;
     }
