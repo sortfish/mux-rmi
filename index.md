@@ -1,6 +1,6 @@
 # Introduction to Easy-RMI
 
-Easy-RMI is an easy-to-use replacement for standard Java RMI. Its main features compared to standard Java RMI are:
+Easy-RMI is an easy-to-use replacement for Java RMI. Its main features compared to Java RMI are:
 
  * Support for in-channel callbacks, i.e. the possiblity to perform callbacks without having to create an additional network connection.
  * Increased reliability due to its in-protocol support for keep-alive packages, in order to keep idle network connections alive across network boundaries with short TCP idle timeouts.
@@ -22,7 +22,7 @@ Easy-RMI has been designed with the following goals in mind:
 
 ## Easy-RMI vs Dirmi
  
-In reality Easy-RMI was not created as a replacement for RMI, but as a simpler alternative to another RMI replacement: [Dirmi](https://github.com/cojen/Dirmi).
+In reality Easy-RMI was not created as a replacement for Java RMI, but as a simpler alternative to another Java RMI replacement: [Dirmi](https://github.com/cojen/Dirmi).
 
 Dirmi is a great, full-featured bidirectional RMI library which does everything you could possibly want from an Java RMI replacement.
 I've used it myself for big client-server applications with 1000s of concurrent users distributed across the globe.
