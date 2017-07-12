@@ -9,6 +9,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 
 import javax.net.SocketFactory;
 
@@ -76,7 +77,8 @@ public class RemoteBase {
   }
 
   static <T> List<T> runTasks(final int tasks, final int threads, final Callable<T> task) {
-    final ExecutorService executor = Executors.newFixedThreadPool(threads);
+    final ThreadFactory threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(RemoteBase.class.getCanonicalName()).build();
+    final ExecutorService executor = Executors.newFixedThreadPool(threads, threadFactory);
     final List<Future<T>> futures = new ArrayList<>(tasks);
     for (int i = 0; i < tasks; ++i) {
       futures.add(executor.submit(task));

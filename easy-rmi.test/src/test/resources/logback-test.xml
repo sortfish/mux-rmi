@@ -16,6 +16,11 @@
     <appender-ref ref="STDOUT" />
   </root>
 
+  <logger name="easyrmi" additivity="false">
+    <level value="DEBUG" />
+    <appender-ref ref="STDOUT" />
+  </logger>
+
   <!-- 
   <logger name="easyrmi" additivity="false">
     <level value="TRACE" />

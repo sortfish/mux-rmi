@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -183,7 +184,8 @@ public class KeepAliveTest extends RemoteBase {
   }
 
   private static class KeepAliveTester implements AutoCloseable {
-    final ExecutorService executor = Executors.newCachedThreadPool();
+    final ThreadFactory threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(getClass().getCanonicalName()).build();
+    final ExecutorService executor = Executors.newCachedThreadPool(threadFactory);
 
     private final KeepAlive.Settings settings;
     private long originalKeepAliveInterval = 0L;
