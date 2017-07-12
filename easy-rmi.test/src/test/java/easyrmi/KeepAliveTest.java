@@ -18,27 +18,25 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import easyrmi.RemoteClient.Connection;
 import easyrmi.Protocol.SharedState;
 
 /**
  * @author ReneAndersen
- *
  */
 public class KeepAliveTest extends RemoteBase {
+  private static final Logger logger = LoggerFactory.getLogger(KeepAliveTest.class);
+  
   @BeforeClass
   public static void beforeClass() throws Exception {
+    logger.info("Running beforeClass()");
     RemoteBase.beforeClass();
     final API api = new APIImpl();
     server.register(api);
   }
-
-  // Whether to echo diagnostic information during testing.
-  static final boolean ECHO = true;
-
-  // Whether to print performance statistics during testing.
-  static final boolean STAT = true;
 
   // The keep-alive interval and margin to set while testing.
   private static final long KEEP_ALIVE_INTERVAL_SEC = 1;
@@ -52,11 +50,9 @@ public class KeepAliveTest extends RemoteBase {
 
   @Test
   public void testKeepAliveDefault() throws Exception {
-    if (ECHO) {
-      System.out.println("Running testKeepAliveDefault()");
-    }
-    try (final RemoteClient client = createClient(getClass().getClassLoader())) {
-      try (final KeepAliveTester keepAliveTester = new KeepAliveTester(null)) {
+    logger.info("Running testKeepAliveDefault()");
+    try (final KeepAliveTester keepAliveTester = new KeepAliveTester(null)) {
+      try (final RemoteClient client = createClient(getClass().getClassLoader())) {
         final API api = client.connect(API.class);
 
         final KeepAliveTester.Task task = keepAliveTester.task(SAMPLE_INTERVAL_MILLIS, client);
@@ -71,9 +67,7 @@ public class KeepAliveTest extends RemoteBase {
 
   @Test
   public void testKeepAliveIdle() throws Exception {
-    if (ECHO) {
-      System.out.println("Running testKeepAliveIdle()");
-    }
+    logger.info("Running testKeepAliveIdle()");
     try (final KeepAliveTester keepAliveTester = new KeepAliveTester(keepAliveSettings)) {
       try (final RemoteClient client = createClient(getClass().getClassLoader())) {
         final API api = client.connect(API.class);
@@ -94,9 +88,7 @@ public class KeepAliveTest extends RemoteBase {
 
   @Test
   public void testKeepAliveActive() throws Exception {
-    if (ECHO) {
-      System.out.println("Running testKeepAliveActive()");
-    }
+    logger.info("Running testKeepAliveActive()");
     try (final KeepAliveTester keepAliveTester = new KeepAliveTester(keepAliveSettings)) {
       try (final RemoteClient client = createClient(getClass().getClassLoader())) {
         final API api = client.connect(API.class);
@@ -118,8 +110,9 @@ public class KeepAliveTest extends RemoteBase {
 
   @Test
   public void testKeepAliveFailureDisconnect() throws Exception {
+    logger.info("Running testKeepAliveFailureDisconnect()");
     final RemoteClient client = createClient(getClass().getClassLoader());
-    try {
+    try (KeepAliveTester keepAliveTester = new KeepAliveTester(keepAliveSettings)) {
       final API api = client.connect(API.class);
       final Collection<Connection> connections = client.getConnections();
       Assert.assertEquals(connections.toString(), 1, connections.size());
@@ -138,7 +131,7 @@ public class KeepAliveTest extends RemoteBase {
         api.echo(42);
         Assert.fail("Method invocation on remote connection did not fail as expected: " + connection.protocol);
       } catch (final Exception e) {
-        System.out.println("Expected socket error from disconnected remote connection: " + e);
+        logger.info("Expected socket error from disconnected remote connection: " + e);
       }
     } finally {
       client.close();
@@ -147,9 +140,7 @@ public class KeepAliveTest extends RemoteBase {
 
   @Test
   public void testKeepAlive100SporadicTasks() throws Exception {
-    if (ECHO) {
-      System.out.println("Running testKeepAlive100SporadicTasks()");
-    }
+    logger.info("Running testKeepAlive100SporadicTasks()");
     final List<Long> maxCommandIntervals;
     try (final KeepAliveTester keepAliveTester = new KeepAliveTester(keepAliveSettings)) {
       try (final RemoteClient client = createClient(getClass().getClassLoader())) {
@@ -169,10 +160,8 @@ public class KeepAliveTest extends RemoteBase {
         failures.add(maxCommandInterval);
       }
     }
-    if (ECHO) {
-      System.out.println("Global MaxCommandInterval=" + globalMaxCommandInterval);
-      System.out.println("Average MaxCommandInterval=" + averageMaxCommandInterval);
-    }
+    logger.debug("Global MaxCommandInterval={}", globalMaxCommandInterval);
+    logger.debug("Average MaxCommandInterval={}", averageMaxCommandInterval);
     Assert.assertTrue("Ping-interval(s) exceeded: " + failures.toString(), failures.isEmpty());
   }
 
@@ -222,9 +211,7 @@ public class KeepAliveTest extends RemoteBase {
       @Override
       public final Long call() throws Exception {
         final Collection<Connection> connections = client.getConnections();
-        if (ECHO) {
-          System.out.println("Running KeepAliveTester.Task on: " + connections);
-        }
+        logger.debug("Running KeepAliveTester.Task on: {}", connections);
         Assert.assertTrue(connections.toString(), connections.size() == 1);
 
         final SharedState sharedState = connections.iterator().next().protocol.getSharedState();
@@ -243,14 +230,12 @@ public class KeepAliveTest extends RemoteBase {
           maxCommandInterval = Math.max(maxCommandInterval, lastCommandInterval);
           Thread.sleep(sampleIntervalMillis);
         } while (!done);
-        if (ECHO) {
-          System.out.println("MaxCommandInterval=" + maxCommandInterval + " CommandIntervals=" + commandIntervals);
-        }
-        if (STAT) {
+        logger.debug("MaxCommandInterval={}, CommandIntervals={}", maxCommandInterval, commandIntervals);
+        if (logger.isTraceEnabled()) {
           final RemoteServer.Statistics serverStats = server.getStatistics();
-          System.out.println("Server connectionCount=" + serverStats.connectionCount  + " threadCount=" + serverStats.threadCount);
+          logger.trace("Server connectionCount={}, threadCount={}", serverStats.connectionCount, serverStats.threadCount);
           final KeepAlive.Statistics keepAliveStats = server.getKeepAlive().getStatistics();
-          System.out.println("KeepAlive taskCount=" + keepAliveStats.taskCount + " threadCount=" + keepAliveStats.threadCount);
+          logger.trace("KeepAlive taskCount={}, threadCount={}", keepAliveStats.taskCount, keepAliveStats.threadCount);
         }
         return maxCommandInterval;
       }
@@ -284,7 +269,7 @@ public class KeepAliveTest extends RemoteBase {
     public void close() throws Exception {
       if (settings != null) {
         settings.intervalSec.set(originalKeepAliveInterval);
-        settings.intervalSec.set(originalKeepAliveMargin);
+        settings.marginSec.set(originalKeepAliveMargin);
       }
     }
   }
@@ -313,9 +298,7 @@ public class KeepAliveTest extends RemoteBase {
         final KeepAliveTester.Task task = keepAliveTester.task(SAMPLE_INTERVAL_MILLIS, client);
         try (AutoCloseable runner = task.start()) {
           final Random random = new Random();
-          if (ECHO) {
-            System.out.println("SporadicTask(" + id + ") running");
-          }
+          logger.debug("SporadicTask({}) running", id);
           for (long i = 0; i < iterations; ++i) {
             final long sleepTimeMillis = random.nextInt(2*meanInterval);
             sleepTimes.add(sleepTimeMillis);
@@ -324,12 +307,10 @@ public class KeepAliveTest extends RemoteBase {
           }
         }
         final long maxCommandInterval = task.getMaxCommandInterval();
-        if (ECHO) {
-          System.out.println("SporadicTask(" + id + ") finished. MaxCommandInterval=" + maxCommandInterval + " SleepTimes=" + sleepTimes);
-        }
-        if (STAT) {
+        logger.debug("SporadicTask({}) finished. MaxCommandInterval={}, SleepTimes={}", id, maxCommandInterval, sleepTimes);
+        if (logger.isTraceEnabled()) {
           final RemoteServer.Statistics serverStats = server.getStatistics();
-          System.out.println("Server connectionCount=" + serverStats.connectionCount  + " threadCount=" + serverStats.threadCount);
+          logger.trace("Server connectionCount={}, threadCount={}", serverStats.connectionCount, serverStats.threadCount);
           final KeepAlive.Statistics keepAliveStats = server.getKeepAlive().getStatistics();
           System.out.println("KeepAlive taskCount=" + keepAliveStats.taskCount + " threadCount=" + keepAliveStats.threadCount);
         }

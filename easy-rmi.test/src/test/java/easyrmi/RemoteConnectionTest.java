@@ -10,11 +10,14 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author ReneAndersen
  */
 public class RemoteConnectionTest extends RemoteBase {
+  private static final Logger logger = LoggerFactory.getLogger(RemoteConnectionTest.class);
 
   enum Method { ECHO, EXCEPTION, ECHO_CALLBACK_IN_CALLBACK, EXCEPTION_CALLBACK_IN_CALLBACK, ECHO_ON_RETURNED_CALLBACK };
 
@@ -68,6 +71,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @BeforeClass
   public static void beforeClass() throws Exception {
+    logger.info("Running beforeClass()");
     RemoteBase.beforeClass();
     final API api = new APIImpl();
     Assert.assertEquals(API.class, server.register(api).get(0));
@@ -76,6 +80,7 @@ public class RemoteConnectionTest extends RemoteBase {
   @Override
   @Before
   public void before() throws Exception {
+    logger.info("Running before()");
     super.before();
     client = createClient(getClass().getClassLoader());
     api = client.connect(API.class);
@@ -83,6 +88,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @After
   public void after() throws Exception {
+    logger.info("Running after()");
     client.dispose(api);
     client.close();
   }
@@ -93,11 +99,13 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testUnboundInterface() throws Exception {
+    logger.info("Running testUnboundInterface(");
     connectNotBound(UnboundInterface.class, client);
   }
 
   @Test
   public void testClientConnectFailure() throws Exception {
+    logger.info("Running testClientConnectFailure()");
     service.close();
     try {
       final RemoteClient unconnectedClient = createClient(getClass().getClassLoader());
@@ -105,12 +113,13 @@ public class RemoteConnectionTest extends RemoteBase {
       client.dispose(unexpected);
       Assert.fail("Proxy was created for unconnected client");
     } catch (final ConnectException e) {
-      // expected
+      logger.info("Expected error: {}", e.toString());
     }
   }
 
   @Test
   public void testClientDisconnectFailure() throws Exception {
+    logger.info("Running testClientDisconnectFailure()");
     service.close();
     try {
       final Object unexpected = api.echo(42);
@@ -122,6 +131,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testEcho() throws Exception {
+    logger.info("Running testEcho()");
     final Object[] args = new Object[] {42, 3.1415, "Hello world!"};
     for (final Object arg : args) {
       final Object result = api.echo(arg);
@@ -131,6 +141,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testException() throws Exception {
+    logger.info("Running testException()");
     final Exception[] excs = new Exception[] { new RuntimeException("ouch!"), new RemoteException("bad call!"), new NullPointerException() };
     for (final Exception ex : excs) {
       try {
@@ -144,6 +155,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testEchoCallback() throws Exception {
+    logger.info("Running testEchoCallback()");
     final API cbapi = new APIImpl();
     final Object arg = Integer.valueOf(42);
     final Object result = api.callback(Method.ECHO, cbapi, 42);
@@ -152,6 +164,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testExceptionCallback() throws Exception {
+    logger.info("Running testExceptionCallback()");
     final API cbapi = new APIImpl();
     final Exception ex = new RuntimeException("ouch!");
     try {
@@ -164,6 +177,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testEchoCallbackInCallback() throws Exception {
+    logger.info("Running testEchoCallbackInCallback()");
     final API cbapi = new APIImpl();
     final Object arg = Integer.valueOf(42);
     final Object result = api.callback(Method.ECHO_CALLBACK_IN_CALLBACK, cbapi, arg);
@@ -172,11 +186,13 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testExceptionCallbackInCallback() throws Exception {
+    logger.info("Running testExceptionCallbackInCallback()");
     final API cbapi = new APIImpl();
     final Exception ex = new RuntimeException("ouch!");
     try {
       api.callback(Method.EXCEPTION_CALLBACK_IN_CALLBACK, cbapi, ex);
     } catch (final Exception e) {
+      logger.debug("Caught exception: {}", e.toString());
       Assert.assertEquals(e.toString(), ex.getClass(), e.getClass());
       Assert.assertEquals(ex.getMessage(), e.getMessage());
     }
@@ -184,6 +200,7 @@ public class RemoteConnectionTest extends RemoteBase {
 
   @Test
   public void testEchoOnReturnedCallback() throws Exception {
+    logger.info("Running testEchoOnReturnedCallback()");
     final API cbapi = new APIImpl();
     final Object arg = Integer.valueOf(42);
     final Object result = api.callback(Method.ECHO_ON_RETURNED_CALLBACK, cbapi, arg);

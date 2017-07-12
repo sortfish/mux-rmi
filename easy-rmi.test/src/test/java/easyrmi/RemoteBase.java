@@ -16,24 +16,27 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
-
-import easyrmi.RemoteServer.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Common base class for remote tests.
  * @author ReneAndersen
  */
 public class RemoteBase {
+  private static final Logger logger = LoggerFactory.getLogger(RemoteBase.class);
+  
   protected static final int LISTEN_PORT = 0;
 
   protected static KeepAlive.Settings keepAliveSettings;
   protected static RemoteServer server;
-  protected static Service service;
+  protected static RemoteServer.Service service;
 
   protected static ClassLoader classLoader = RemoteBase.class.getClassLoader();
 
   @BeforeClass
   public static void beforeClass() throws Exception {
+    logger.info("Running beforeClass()");
     keepAliveSettings = new KeepAlive.Settings();
     server = new RemoteServer(classLoader, new RemoteServer.Settings(keepAliveSettings));
     service = server.start(createServerSocket());
@@ -41,11 +44,13 @@ public class RemoteBase {
 
   @AfterClass
   public static void afterClass() {
+    logger.info("Running afterClass()");
     server.close();
   }
 
   @Before
   public void before() throws Exception {
+    logger.info("Running before()");
     if (service.isClosed()) {
       service = server.start(createServerSocket());
     }

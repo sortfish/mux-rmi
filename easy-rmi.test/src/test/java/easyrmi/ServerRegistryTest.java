@@ -8,6 +8,8 @@ import java.util.List;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -15,6 +17,7 @@ import org.junit.Test;
  * @author ReneAndersen
  */
 public class ServerRegistryTest extends RemoteBase {
+  private static final Logger logger = LoggerFactory.getLogger(ServerRegistryTest.class);
 
   public interface UnremoteInterface {}
 
@@ -24,6 +27,7 @@ public class ServerRegistryTest extends RemoteBase {
 
   @Test
   public void testUnremoteClass() throws Exception {
+    logger.info("Running testUnremoteClass()");
     final UnremoteObject unremoteObject = new UnremoteObject();
     try {
       server.register(unremoteObject);
@@ -38,6 +42,7 @@ public class ServerRegistryTest extends RemoteBase {
 
   @Test
   public void testAlreadyRegistered() throws Exception {
+    logger.info("Running testAlreadyRegistered()");
     final RemoteObject obj = new RemoteObject();
     server.register(obj);
 
@@ -52,6 +57,7 @@ public class ServerRegistryTest extends RemoteBase {
 
   @Test
   public void testUnregisterUnregistered() {
+    logger.info("Running testUnregisterUnregistered()");
     final RemoteObject obj = new RemoteObject();
     final boolean result = server.unregister(obj);
     Assert.assertFalse("An unregistered object was successfully unregistered", result);
@@ -69,6 +75,7 @@ public class ServerRegistryTest extends RemoteBase {
 
   @Test
   public void testRegisterPartiallyRemote() throws Exception {
+    logger.info("Running testRegisterPartiallyRemote()");
     final RemoteInterface obj = new PartiallyRemoteSubObject();
     final List<Class<?>> registered = server.register(obj);
     try {

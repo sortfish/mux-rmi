@@ -5,12 +5,16 @@ import java.util.concurrent.Callable;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Stress test of the remote server acceptor.
  * @author ReneAndersen
  */
 public class ServerAcceptorStressTest extends RemoteBase {
+  private static final Logger logger = LoggerFactory.getLogger(ServerAcceptorStressTest.class);
+  
   @BeforeClass
   public static void beforeClass() throws Exception {
     RemoteBase.beforeClass();
@@ -30,6 +34,7 @@ public class ServerAcceptorStressTest extends RemoteBase {
 
   @Test
   public void testAcceptorThroughput100() throws Exception {
+    logger.info("Running testAcceptorThroughput100()");
     final int sz = 100;
     runTasks(sz, 1, new ProxyTask());
   }
@@ -37,6 +42,7 @@ public class ServerAcceptorStressTest extends RemoteBase {
 
   @Test
   public void testAcceptorThroughput250() throws Exception {
+    logger.info("Running testAcceptorThroughput250()");
     final int sz = 250;
     runTasks(sz, 1, new ProxyTask());
   }
@@ -44,6 +50,7 @@ public class ServerAcceptorStressTest extends RemoteBase {
 
   @Test
   public void testAcceptorThroughput500() throws Exception {
+    logger.info("Running testAcceptorThroughput500()");
     final int sz = 500;
     runTasks(sz, 1, new ProxyTask());
   }
@@ -51,6 +58,7 @@ public class ServerAcceptorStressTest extends RemoteBase {
 
   @Test
   public void testAcceptorParallelism100() throws Exception {
+    logger.info("Running testAcceptorParallelism100()");
     final int sz = 100;
     runTasks(sz, sz, new ProxyTask());
   }
@@ -58,6 +66,7 @@ public class ServerAcceptorStressTest extends RemoteBase {
 
   @Test
   public void testAcceptorParallelism250() throws Exception {
+    logger.info("Running testAcceptorParallelism250()");
     final int sz = 250;
     runTasks(sz, sz, new ProxyTask());
   }
@@ -65,6 +74,7 @@ public class ServerAcceptorStressTest extends RemoteBase {
 
   @Test
   public void testAcceptorParallelism500() throws Exception {
+    logger.info("Running testAcceptorParallelism500()");
     final int sz = 500;
     runTasks(sz, sz, new ProxyTask());
   }
