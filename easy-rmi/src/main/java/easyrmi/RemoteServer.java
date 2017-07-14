@@ -21,8 +21,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import easyrmi.Protocol.ClassRef;
-import easyrmi.Statistics.Counter;
-import easyrmi.Statistics.Value;
 
 /**
  * Implementation of a remote server.
@@ -42,11 +40,11 @@ public class RemoteServer implements AutoCloseable {
   private final ExecutorService executor = Executors.newCachedThreadPool(threadFactory);
   private final Set<Service> services = new HashSet<>();
   private final Registry registry = new Registry();
-  private final KeepAlive keepAlive;
 
+  private final Statistics stats;
+  private final KeepAlive keepAlive;
   private final ClassLoader classLoader;
 
-  private final Statistics stats = new Statistics();
 
   private List<ClassRef> findRemoteInterfaces(final Class<?> cls) throws InvalidClassException {
     final List<ClassRef> res = new ArrayList<>();
@@ -74,6 +72,7 @@ public class RemoteServer implements AutoCloseable {
    * Configuration settings for a remote server.
    */
   public static class Settings {
+    private final StatisticsProvider statistics;
     private final KeepAlive.Settings keepAlive;
 
     /**
@@ -81,13 +80,15 @@ public class RemoteServer implements AutoCloseable {
      * @return the default configuration settings.
      */
     public static Settings getDefault() {
-      return new Settings(new KeepAlive.Settings());
+      return new Settings(new StatisticsProvider(), new KeepAlive.Settings());
     }
 
     /**
+     * @param statistics the statistics provider.
      * @param keepAlive the keep-alive settings.
      */
-    public Settings(final KeepAlive.Settings keepAlive) {
+    public Settings(final StatisticsProvider statistics, final KeepAlive.Settings keepAlive) {
+      this.statistics = statistics;
       this.keepAlive = keepAlive;
     }
   }
@@ -98,8 +99,9 @@ public class RemoteServer implements AutoCloseable {
    * @param settings the configuration settings for the remote server.
    */
   public RemoteServer(final ClassLoader classLoader, final Settings settings) {
+    this.stats = new Statistics(settings.statistics);
+    this.keepAlive = new KeepAlive(settings.keepAlive, settings.statistics);
     this.classLoader = classLoader;
-    this.keepAlive = new KeepAlive(settings.keepAlive);
   }
 
   /**
@@ -150,7 +152,11 @@ public class RemoteServer implements AutoCloseable {
   /**
    * Statistics for a remote service instance.
    */
-  public class Statistics {
+  public class Statistics extends StatisticsProvider {
+    Statistics(StatisticsProvider statistics) {
+      super(statistics);
+    }
+    
     Value threadCount = new Value(RemoteServer.class, "thread-count") { //$NON-NLS-1$
       @Override
       protected int get() {

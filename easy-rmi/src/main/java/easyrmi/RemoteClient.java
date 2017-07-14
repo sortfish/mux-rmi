@@ -61,6 +61,7 @@ public class RemoteClient implements AutoCloseable {
   public static class Settings {
     final SocketFactory socketFactory;
     final SocketAddress endpoint;
+    final StatisticsProvider statistics; 
     final KeepAlive.Settings keepAlive;
 
     /**
@@ -69,17 +70,19 @@ public class RemoteClient implements AutoCloseable {
      * @param endpoint the socket address endpoint to connect to.
      */
     public Settings(final SocketFactory socketFactory, final SocketAddress endpoint) {
-      this(socketFactory, endpoint, new KeepAlive.Settings());
+      this(socketFactory, endpoint, new StatisticsProvider(), new KeepAlive.Settings());
     }
 
     /**
      * @param socketFactory a socket factory for connecting to the remote server.
      * @param endpoint the socket address endpoint to connect to.
+     * @param statistics the statistics to use.
      * @param keepAliveSettings the keep-alive settings.
      */
-    public Settings(final SocketFactory socketFactory, final SocketAddress endpoint, final KeepAlive.Settings keepAliveSettings) {
+    public Settings(final SocketFactory socketFactory, final SocketAddress endpoint, final StatisticsProvider statistics, final KeepAlive.Settings keepAliveSettings) {
       this.socketFactory = socketFactory;
       this.endpoint = endpoint;
+      this.statistics = statistics;
       this.keepAlive = keepAliveSettings;
     }
   }
@@ -91,7 +94,7 @@ public class RemoteClient implements AutoCloseable {
   public RemoteClient(final ClassLoader classLoader, final Settings settings) {
     this.classLoader = classLoader;
     this.settings = settings;
-    this.keepAlive = new KeepAlive(settings.keepAlive);
+    this.keepAlive = new KeepAlive(settings.keepAlive, settings.statistics);
   }
 
   /**

@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 /**
  * @author ReneAndersen
  */
-public class RemoteConnectionTest extends RemoteBase {
+public class RemoteConnectionTest extends RemoteTestBase {
   private static final Logger logger = LoggerFactory.getLogger(RemoteConnectionTest.class);
 
   enum Method { ECHO, EXCEPTION, ECHO_CALLBACK_IN_CALLBACK, EXCEPTION_CALLBACK_IN_CALLBACK, ECHO_ON_RETURNED_CALLBACK };
@@ -72,7 +72,7 @@ public class RemoteConnectionTest extends RemoteBase {
   @BeforeClass
   public static void beforeClass() throws Exception {
     logger.info("Running beforeClass()");
-    RemoteBase.beforeClass();
+    RemoteTestBase.beforeClass();
     final API api = new APIImpl();
     Assert.assertEquals(API.class, server.register(api).get(0));
   }

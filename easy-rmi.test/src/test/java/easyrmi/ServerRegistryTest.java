@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
  * Test the remote server registry
  * @author ReneAndersen
  */
-public class ServerRegistryTest extends RemoteBase {
+public class ServerRegistryTest extends RemoteTestBase {
   private static final Logger logger = LoggerFactory.getLogger(ServerRegistryTest.class);
 
   public interface UnremoteInterface {}

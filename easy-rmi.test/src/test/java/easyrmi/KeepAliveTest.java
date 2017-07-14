@@ -28,13 +28,13 @@ import easyrmi.Protocol.SharedState;
 /**
  * @author ReneAndersen
  */
-public class KeepAliveTest extends RemoteBase {
+public class KeepAliveTest extends RemoteTestBase {
   private static final Logger logger = LoggerFactory.getLogger(KeepAliveTest.class);
   
   @BeforeClass
   public static void beforeClass() throws Exception {
     logger.info("Running beforeClass()");
-    RemoteBase.beforeClass();
+    RemoteTestBase.beforeClass();
     final API api = new APIImpl();
     server.register(api);
   }
@@ -125,7 +125,7 @@ public class KeepAliveTest extends RemoteBase {
       Assert.assertTrue("Stopping keep-alive for connection failed: " + connection, keepAlive.stop(connection.protocol));
       Assert.assertTrue("Task was not closed: " + task, task.closed);
 
-      final long secondsToSleep = keepAlive.settings.intervalSec.get() + keepAlive.settings.marginSec.get() + 1;
+      final long secondsToSleep = KEEP_ALIVE_INTERVAL_SEC + KEEP_ALIVE_MARGIN_SEC + 1;
       Thread.sleep(TimeUnit.SECONDS.toMillis(secondsToSleep));
 
       try {

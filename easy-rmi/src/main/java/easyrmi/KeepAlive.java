@@ -17,8 +17,6 @@ import org.slf4j.LoggerFactory;
 
 import easyrmi.Protocol.SharedState;
 import easyrmi.Protocol.State;
-import easyrmi.Statistics.Counter;
-import easyrmi.Statistics.Value;
 import easysettings.ConfigurationSettings;
 
 /**
@@ -29,12 +27,11 @@ import easysettings.ConfigurationSettings;
 class KeepAlive implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(KeepAlive.class);
 
-
+  private final Settings settings;
+  private final Statistics stats;
   private final Map<Object, Task> tasks = new HashMap<>();
   private final ThreadFactory threadFactory;
   private final ScheduledExecutorService scheduler;
-
-  private final Statistics stats = new Statistics();
 
   static class Settings extends ConfigurationSettings.FromSystemProperties {
     static final String KEEP_ALIVE_PREFIX = KeepAlive.class.getPackage().getName() + ".keep-alive.";
@@ -54,23 +51,24 @@ class KeepAlive implements AutoCloseable {
     }
   }
 
-  final Settings settings;
-
-
-
   /**
    * Create a new keep-alive handler instance.
    */
-  KeepAlive(final Settings settings) {
+  KeepAlive(final Settings settings, final easyrmi.StatisticsProvider statistics) {
+    this.settings = settings;
+    this.stats = new Statistics(statistics);
     this.threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(getClass().getCanonicalName()).build();
     this.scheduler = Executors.newScheduledThreadPool(1, threadFactory);
-    this.settings = settings;
   }
 
   /**
    * Statistics for a keep-alive handler.
    */
-  final class Statistics {
+  final class Statistics extends StatisticsProvider {
+    Statistics(final StatisticsProvider statistics) {
+      super(statistics);
+    }
+    
     final Value threadCount = new Value(KeepAlive.class, "thread-count") {
       @Override
       protected int get() {

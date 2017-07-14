@@ -12,12 +12,12 @@ import org.slf4j.LoggerFactory;
  * Stress test of the remote server acceptor.
  * @author ReneAndersen
  */
-public class ServerAcceptorStressTest extends RemoteBase {
+public class ServerAcceptorStressTest extends RemoteTestBase {
   private static final Logger logger = LoggerFactory.getLogger(ServerAcceptorStressTest.class);
   
   @BeforeClass
   public static void beforeClass() throws Exception {
-    RemoteBase.beforeClass();
+    RemoteTestBase.beforeClass();
     final API api = new APIImpl();
     server.register(api);
   }
