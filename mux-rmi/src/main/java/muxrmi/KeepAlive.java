@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package easyrmi;
+package muxrmi;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -38,9 +38,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import easyrmi.Protocol.SharedState;
-import easyrmi.Protocol.State;
 import easysettings.ConfigurationSettings;
+import muxrmi.Protocol.SharedState;
+import muxrmi.Protocol.State;
 
 /**
  * Implementation of a keep-alive handler for remote connections. All keep-alive tasks started by an instance of this class
@@ -77,7 +77,7 @@ class KeepAlive implements AutoCloseable {
   /**
    * Create a new keep-alive handler instance.
    */
-  KeepAlive(final Settings settings, final easyrmi.StatisticsProvider statistics) {
+  KeepAlive(final Settings settings, final muxrmi.StatisticsProvider statistics) {
     this.settings = settings;
     this.stats = new Statistics(statistics);
     this.threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(getClass().getCanonicalName()).build();

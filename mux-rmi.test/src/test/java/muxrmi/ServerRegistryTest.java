@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package easyrmi;
+package muxrmi;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -33,6 +33,8 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import muxrmi.RemoteClient;
 
 
 /**

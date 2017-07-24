@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package easyrmi;
+package muxrmi;
 
 import java.rmi.Remote;
 import java.util.concurrent.Callable;
@@ -30,6 +30,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import muxrmi.RemoteClient;
 
 /**
  * Stress test of the remote server acceptor.

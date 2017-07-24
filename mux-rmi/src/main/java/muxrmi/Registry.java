@@ -21,15 +21,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package easyrmi;
+package muxrmi;
 
 import java.lang.reflect.Method;
 import java.rmi.NotBoundException;
 import java.util.HashMap;
 import java.util.Map;
 
-import easyrmi.Protocol.ClassRef;
-import easyrmi.Protocol.MethodRef;
+import muxrmi.Protocol.ClassRef;
+import muxrmi.Protocol.MethodRef;
 
 /**
  * A registry of methods and object references which are accessible remotely.

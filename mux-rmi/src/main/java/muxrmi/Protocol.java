@@ -21,12 +21,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package easyrmi;
+package muxrmi;
 
-import static easyrmi.Protocol.State.ACCEPT;
-import static easyrmi.Protocol.State.CLOSED;
-import static easyrmi.Protocol.State.INITIAL;
-import static easyrmi.Protocol.State.RUNNING;
+import static muxrmi.Protocol.State.ACCEPT;
+import static muxrmi.Protocol.State.CLOSED;
+import static muxrmi.Protocol.State.INITIAL;
+import static muxrmi.Protocol.State.RUNNING;
 
 import java.io.EOFException;
 import java.io.IOException;

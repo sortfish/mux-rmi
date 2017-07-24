@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package easyrmi;
+package muxrmi;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 
@@ -45,8 +45,12 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import easyrmi.RemoteClient.Connection;
-import easyrmi.Protocol.SharedState;
+import muxrmi.KeepAlive;
+import muxrmi.RemoteClient;
+import muxrmi.RemoteServer;
+import muxrmi.ThreadFactoryBuilder;
+import muxrmi.Protocol.SharedState;
+import muxrmi.RemoteClient.Connection;
 
 /**
  * @author ReneAndersen
