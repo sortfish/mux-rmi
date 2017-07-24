@@ -1,4 +1,4 @@
-# Easy-RMI
-Easy-RMI is an easy-to-use replacement for standard Java RMI.
+# Mux-RMI
+Mux-RMI is an easy-to-use 2-way multiplexed replacement for Java RMI.
 
-See the [Github Page](https://rene-andersen.github.io/easy-rmi/) for more information.
+See the [Github Page](https://rene-andersen.github.io/mux-rmi/) for more information.
