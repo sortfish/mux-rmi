@@ -14,7 +14,7 @@ Mux-RMI is licensed under the MIT license. See the `LICENSE` file for details.
 
 Mux-RMI has been designed with the following goals in mind:
 
- 1. It should be light weight, easy to use, and easy to understand.
+ 1. It should be light weight and easy to use.
  2. It should behave as similar to a request-response protocol (HTTP, REST, ...) as possible, i.e. each request should require only one connection.
  3. It should be stateless in order to work on load balanced systems.
  4. It should conserve network resources, i.e. reuse connections when possible, close them when not needed.
@@ -28,14 +28,9 @@ Dirmi is a great, full-featured bidirectional RMI library which does everything 
 I've used it myself for big client-server applications with 1000s of concurrent users distributed across the globe.
 But in that context its design does have some limitations:
 
- * The use of multiple parallel network connections for each Dirmi session makes it vulnerable to load balancing issues.
+ * Dirmi is stateful and vulnerable to load balancing issues due to the use of multiple parallel network connections for each Dirmi session.
  * Dirmi is also vulnerable to network timeouts during long-running requests, even if the ping interval is lowered to prevent timeouts during periods of inactivity.
- 
- The main differences in Mux-RMI compared to Dirmi are:
- 
-  * A simpler design with fewer tweakable configuration settings.
-  * A much smaller code base makes issues easier to understand and debug.
- 
+  
  The main design limitations of Mux-RMI compared to Dirmi are:
  
   * A remote reference can only be created for an interface type, not for a class type. The interface must extend `java.rmi.Remote`.
