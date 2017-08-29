@@ -314,7 +314,7 @@ public class RemoteClient implements AutoCloseable {
             closeConnection(entry.getValue());
           }
           connectionsToRemove.clear();
-          logger.debug("ConnectionPoolCleanup: active connections: {}", connectionPool); //$NON-NLS-1$
+          logger.debug("ConnectionPoolCleanup: active connections ({}): {}", connectionPool.size(), connectionPool); //$NON-NLS-1$
         }
       }
 
