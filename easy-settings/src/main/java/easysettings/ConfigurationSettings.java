@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -374,6 +373,15 @@ public abstract class ConfigurationSettings {
   }
 
   /**
+   * Java 7 stand-in for 'java.util.Function'.
+   * @param <Arg>
+   * @param <Res>
+   */
+  public interface Function<Arg, Res> {
+    Res apply(Arg arg);
+  }
+  
+  /**
    * A parsable value of type {@code V}.
    * @param V the type of the value
    */
@@ -412,7 +420,12 @@ public abstract class ConfigurationSettings {
      * @param defaultValue the default value.
      */
     public IntegerValue(final String name, final int defaultValue) {
-      super(name, defaultValue, Integer::valueOf);
+      super(name, defaultValue, new Function<String, Integer>() {
+        @Override
+        public Integer apply(String arg) {
+          return Integer.valueOf(arg);
+        }
+      });
     }
   }
 
@@ -426,7 +439,12 @@ public abstract class ConfigurationSettings {
      * @param defaultValue the default value.
      */
     public LongValue(final String name, final long defaultValue) {
-      super(name, defaultValue, Long::valueOf);
+      super(name, defaultValue, new Function<String, Long>() {
+        @Override
+        public Long apply(String arg) {
+          return Long.valueOf(arg);
+        }
+      });
     }
   }
 
@@ -439,7 +457,12 @@ public abstract class ConfigurationSettings {
      * @param defaultValue the default value.
      */
     public BooleanValue(final String name, final boolean defaultValue) {
-      super(name, defaultValue, Boolean::parseBoolean);
+      super(name, defaultValue, new Function<String, Boolean>() {
+        @Override
+        public Boolean apply(String arg) {
+          return Boolean.parseBoolean(arg);
+        }
+      });
     }
   }
 }
