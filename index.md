@@ -10,7 +10,7 @@ Mux-RMI is an easy-to-use 2-way multiplexed replacement for Java RMI. Its main f
 
 Mux-RMI is licensed under the MIT license. See the `LICENSE` file for details.
 
-# Philosophy of Easy-RMI
+# Philosophy of Mux-RMI
 
 Mux-RMI has been designed with the following goals in mind:
 
