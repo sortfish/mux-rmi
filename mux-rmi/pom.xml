@@ -2,14 +2,14 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.sortfish</groupId>
   <artifactId>mux-rmi</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <name>Mux-RMI</name>
   <description>An 2-way multiplexed replacement for standard Java RMI</description>
   <dependencies>
   	<dependency>
   		<groupId>io.github.easy-settings</groupId>
   		<artifactId>easy-settings</artifactId>
-  		<version>[0.1,)</version>
+  		<version>[0.2,)</version>
   	</dependency>
   	<dependency>
   		<groupId>com.codahale.metrics</groupId>
@@ -19,7 +19,7 @@
   	<dependency>
   		<groupId>org.slf4j</groupId>
   		<artifactId>slf4j-api</artifactId>
-  		<version>[1.7.25,)</version>
+  		<version>1.6.6</version>
   	</dependency>
   	<dependency>
   		<groupId>junit</groupId>

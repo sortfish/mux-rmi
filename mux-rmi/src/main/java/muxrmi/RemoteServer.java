@@ -64,6 +64,7 @@ public class RemoteServer implements AutoCloseable {
   private final Set<Service> services = new HashSet<>();
   private final Registry registry = new Registry();
 
+  private final Settings settings;
   private final Statistics stats;
   private final KeepAlive keepAlive;
   private final ClassLoader classLoader;
@@ -96,23 +97,33 @@ public class RemoteServer implements AutoCloseable {
    */
   public static class Settings {
     private final StatisticsProvider statistics;
-    private final KeepAlive.Settings keepAlive;
+    private final KeepAlive.Settings keepAliveSettings;
+    private final SocketSettings socketSettings;
 
     /**
      * Create default configuration settings.
      * @return the default configuration settings.
      */
     public static Settings getDefault() {
-      return new Settings(new StatisticsProvider(), new KeepAlive.Settings());
+      return new Settings(new StatisticsProvider(), new KeepAlive.Settings(), new SocketSettings());
     }
 
     /**
      * @param statistics the statistics provider.
-     * @param keepAlive the keep-alive settings.
+     * @param keepAliveSettings the keep-alive settings.
+     * @param socketSettings the socket settings.
      */
-    public Settings(final StatisticsProvider statistics, final KeepAlive.Settings keepAlive) {
+    public Settings(final StatisticsProvider statistics,
+                    final KeepAlive.Settings keepAliveSettings,
+                    final SocketSettings socketSettings) {
       this.statistics = statistics;
-      this.keepAlive = keepAlive;
+      this.keepAliveSettings = keepAliveSettings;
+      this.socketSettings = socketSettings;
+    }
+    
+    /** {@inhericDoc} */
+    public String toString() {
+      return String.format("Settings [keepAliveSettings=%s, socketSettings=%s]", keepAliveSettings, socketSettings);
     }
   }
 
@@ -122,9 +133,12 @@ public class RemoteServer implements AutoCloseable {
    * @param settings the configuration settings for the remote server.
    */
   public RemoteServer(final ClassLoader classLoader, final Settings settings) {
+    this.settings = settings;
     this.stats = new Statistics(settings.statistics);
-    this.keepAlive = new KeepAlive(settings.keepAlive, settings.statistics);
+    this.keepAlive = new KeepAlive(settings.keepAliveSettings, settings.statistics);
     this.classLoader = classLoader;
+    
+    logger.info("{}", this);
   }
 
   /**
@@ -142,6 +156,8 @@ public class RemoteServer implements AutoCloseable {
         registry.registerMethods(classRef);
         classes.add(classRef.classType);
       }
+      
+      logger.info("Registered classes from {}: {}", api, classes);
       return classes;
     }
     else
@@ -236,6 +252,7 @@ public class RemoteServer implements AutoCloseable {
     final Acceptor acceptor = new Acceptor(serverSocket);
     services.add(acceptor);
     executor.execute(acceptor);
+    logger.info("Remote server started: {}", serverSocket);
     return acceptor;
   }
 
@@ -253,6 +270,11 @@ public class RemoteServer implements AutoCloseable {
       keepAlive.close();
     }
   }
+  
+  /** {@inheritDoc} */
+  public String toString() {
+    return String.format("RemoteServer [settings=%s]", settings);
+  }
 
   /**
    * @return the keep-alive handler of this remote client.
@@ -262,7 +284,6 @@ public class RemoteServer implements AutoCloseable {
   }
 
   private class Acceptor implements Runnable, Service {
-    private final SocketSettings socketSettings = new SocketSettings();
     private final Map<Object, Connection> connections = new ConcurrentHashMap<>();
     private final ServerSocket serverSocket;
 
@@ -289,7 +310,7 @@ public class RemoteServer implements AutoCloseable {
         do {
           try {
             final Socket socket = serverSocket.accept();
-            socketSettings.applyTo(socket);
+            settings.socketSettings.applyTo(socket);
 
             final Connection connection = new Connection(Protocol.server(socket, registry, classLoader), this);
             executor.execute(connection);
@@ -314,6 +335,7 @@ public class RemoteServer implements AutoCloseable {
     @Override
     public void close() {
       try {
+        services.remove(this);
         serverSocket.close();
       } catch (final IOException e) {
         logger.error("Error closing server socket: " + serverSocket, e); //$NON-NLS-1$

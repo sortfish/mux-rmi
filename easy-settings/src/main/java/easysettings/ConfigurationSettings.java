@@ -37,10 +37,10 @@ import org.slf4j.LoggerFactory;
  * Base class for objects containing configuration settings. With this class it is possible to handle configuration settings with
  * externally defined values in a standardized and decentralized way.
  * <p/>
- * The suggested way to use this class is to create a local settings class extending it (or one of its descendants),
- * and then declaring each configuration value as a public member of type {@link Value} (or one of its descendants):
+ * The suggested way to use this class is to extend it to a local settings class, and then declare each configuration value as a 
+ * public member of type {@link Value} (or one of its descendants):
  * <pre>
- *   class MySettings extends McConfigurationSettings.FromSystemProperties {
+ *   class MySettings extends McConfigurationSettings {
  *     MySettings() {
  *       super("my-settings-prefix.");
  *     }
@@ -51,6 +51,10 @@ import org.slf4j.LoggerFactory;
  *     // etc...
  *   }
  * </pre>
+ * <p/>
+ * The configuration values will obtain their value from a shared instance of {@link Reader}. Default implementations exist for 
+ * reading values from {@link Properties} objects, and specifically from the global system properties. It is also possible to
+ * implement your own reader and pass it to the configuration settings constructor.
  * <p/>
  * It's possible to subscribe to change events on the individual configuration values so you get notified when that value changes,
  * e.g.:
@@ -79,7 +83,7 @@ public abstract class ConfigurationSettings {
     }
   }
 
-  private String name = "ConfigurationSettings"; //$NON-NLS-1$
+  private final Reader reader; 
   private final Map<String, Value<?>> values = new HashMap<>();
 
   private <T> void register(final Value<T> value) {
@@ -89,28 +93,28 @@ public abstract class ConfigurationSettings {
   }
 
   /**
+   * Create and reload configuration settings read from system properties with the specified prefix.
+   */
+  public ConfigurationSettings(final String prefix) {
+    this(new FromSystemProperties(prefix));
+  }
+
+  /**
    * Create and reload the configuration settings.
    */
-  protected ConfigurationSettings() {
-    this(true);
+  public ConfigurationSettings(final Reader reader) {
+    this.reader = reader;
+    reload();
   }
 
-  /**
-   * Create and (optionally) reload the configuration settings.
-   * @param reload {@code true} to reload, {@code false} otherwise.
-   */
-  protected ConfigurationSettings(final boolean reload) {
-    if (reload) {
-      reload();
-    }
+  public interface Reader {
+    /**
+     * Read the configured value for the specified setting name.
+     * @param name the setting name.
+     * @return the configuration value, or {@code null} if the value hasn't been set.
+     */
+    String readSetting(final String name);
   }
-
-  /**
-   * Read the configured value for the specified setting name.
-   * @param name the setting name.
-   * @return the configuration value, or {@code null} if the value hasn't been set.
-   */
-  protected abstract String readSetting(final String name);
 
   /**
    * Reload all configuration values.
@@ -123,14 +127,6 @@ public abstract class ConfigurationSettings {
         if (logger.isErrorEnabled()) logger.error("Error reading configuration setting value: " + value, cause); //$NON-NLS-1$
       }
     }
-  }
-
-  /**
-   * Set a descriptive name for these configuration settings (used by {@link #toString()}).
-   * @param newName the new name for these configuration settings.
-   */
-  public void setName(final String newName) {
-    this.name = newName;
   }
 
   /**
@@ -152,7 +148,7 @@ public abstract class ConfigurationSettings {
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder();
-    sb.append(name).append("=\n\t");
+    sb.append("ConfigurationSettings [").append(reader).append("]:\n\t");
     sb.append(print("\n\t"));
     return sb.toString();
   }
@@ -160,24 +156,36 @@ public abstract class ConfigurationSettings {
   /**
    * Configuration settings read from a {@link Properties} object.
    */
-  public static class FromProperties extends ConfigurationSettings {
+  public static class FromProperties implements Reader {
     private final String prefix;
     private final Properties properties;
 
     /**
-     * @param prefix the prefix to prepend to the setting names to form a properties key.
+     * @param prefix the prefix to prepend to the setting names to form property keys.
      * @param properties the properties object.
      */
     protected FromProperties(final String prefix, final Properties properties) {
       this.prefix = prefix;
       this.properties = properties;
-      setName("ConfigurationSettings.FromProperties"); //$NON-NLS-1$
+    }
+    
+    /**
+     * @return the prefix being prepended to the setting names to form property keys.
+     */
+    protected String getPrefix() {
+      return prefix;
     }
 
-    /** {@inheritDoc}} */
+    /** {@inheritDoc} */
     @Override
-    protected String readSetting(final String name) {
+    public String readSetting(final String name) {
       return properties.getProperty(prefix + name);
+    }
+    
+    /** {@inheritDoc} */
+    @Override
+    public String toString() {
+      return String.format("FromProperties [prefix=%s]", prefix);
     }
   }
 
@@ -188,9 +196,14 @@ public abstract class ConfigurationSettings {
     /**
      * @param prefix the prefix to prepend to the setting names to form a properties key.
      */
-    protected FromSystemProperties(final String prefix) {
+    public FromSystemProperties(final String prefix) {
       super(prefix, System.getProperties());
-      setName("ConfigurationSettings.FromSystemProperties"); //$NON-NLS-1$
+    }
+    
+    /** {@inheritDoc} */
+    @Override
+    public String toString() {
+      return String.format("FromSystemProperties [prefix=%s]", getPrefix());
     }
   }
 
@@ -311,7 +324,7 @@ public abstract class ConfigurationSettings {
     /** {@inheritDoc} */
     @Override
     public synchronized T reload() {
-      final String stringValue = readSetting(name);
+      final String stringValue = reader.readSetting(name);
       if(stringValue != null) {
         if (image.get() != null && !image.get().equals(stringValue)) {
           final T newValue = valueOf(stringValue);

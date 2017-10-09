@@ -222,7 +222,8 @@ public class KeepAliveTest extends RemoteTestBase {
       this.settings = settings;
       if (settings != null) {
         this.originalKeepAliveInterval = settings.intervalSec.set(KEEP_ALIVE_INTERVAL_SEC);
-        this.originalKeepAliveMargin = settings.marginSec.set(KEEP_ALIVE_MARGIN_SEC);
+        this.originalKeepAliveMargin = settings.sendMarginSec.set(KEEP_ALIVE_MARGIN_SEC);
+        settings.recvMarginSec.set(KEEP_ALIVE_MARGIN_SEC);
       }
     }
 
@@ -298,7 +299,8 @@ public class KeepAliveTest extends RemoteTestBase {
     public void close() throws Exception {
       if (settings != null) {
         settings.intervalSec.set(originalKeepAliveInterval);
-        settings.marginSec.set(originalKeepAliveMargin);
+        settings.sendMarginSec.set(originalKeepAliveMargin);
+        settings.recvMarginSec.set(originalKeepAliveMargin);
       }
     }
   }
@@ -336,7 +338,7 @@ public class KeepAliveTest extends RemoteTestBase {
           }
         }
         final long maxCommandInterval = task.getMaxCommandInterval();
-        logger.debug("SporadicTask({}) finished. MaxCommandInterval={}, SleepTimes={}", id, maxCommandInterval, sleepTimes);
+        logger.debug("SporadicTask({}) finished. MaxCommandInterval={}, SleepTimes={}", new Object[] {id, maxCommandInterval, sleepTimes});
         if (logger.isTraceEnabled()) {
           final RemoteServer.Statistics serverStats = server.getStatistics();
           logger.trace("Server connectionCount={}, threadCount={}", serverStats.connectionCount, serverStats.threadCount);

@@ -36,20 +36,29 @@ import easysettings.ConfigurationSettings;
 /**
  * This class collects and applies socket settings to socket instances.
  */
-class SocketSettings extends ConfigurationSettings.FromSystemProperties {
+class SocketSettings extends ConfigurationSettings {
   private static final Logger logger = LoggerFactory.getLogger(SocketSettings.class);
 
-  private static final String PREFIX = SocketSettings.class.getPackage().getName() + "."; //$NON-NLS-1$
+  private static final String PREFIX = "muxrmi."; //$NON-NLS-1$
 
-  private final IntegerValue soTimeout = new IntegerValue("so-timeout", 0);
-  private final IntegerValue soLinger = new IntegerValue("so-linger", 0);
-  private final BooleanValue tcpNoDelay = new BooleanValue("tcp-no-delay", true);
+  /** Socket read timeout (SO_TIMEOUT) , in seconds. */
+  public final IntegerValue soTimeout = new IntegerValue("so-timeout", 0);
+  
+  /** The "linger" time (SO_LINGER) for a closed socket, in seconds. */
+  public final IntegerValue soLinger = new IntegerValue("so-linger", 0);
+  
+  /** Whether TCP no-delay (TCP_NODELAY) is enabled. */
+  public final BooleanValue tcpNoDelay = new BooleanValue("tcp-no-delay", true);
 
   SocketSettings() {
     super(PREFIX);
     logger.info("SocketSettings: {}", this); //$NON-NLS-1$
   }
 
+  SocketSettings(ConfigurationSettings.Reader reader) {
+    super(reader);
+  }
+  
   void applyTo(final Socket socket) {
     if (logger.isDebugEnabled()) logger.debug("Applying socket settings to '{}': {}", socket, this); //$NON-NLS-1$
     try {

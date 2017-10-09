@@ -63,10 +63,12 @@ public class RemoteTestBase {
   protected static StatisticsProvider statistics;
   protected static JmxReporter jmxReporter;
   protected static KeepAlive.Settings keepAliveSettings;
+  private static SocketSettings socketSettings;
   protected static RemoteServer server;
   protected static RemoteServer.Service service;
 
   protected static ClassLoader classLoader = RemoteTestBase.class.getClassLoader();
+
 
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -75,7 +77,8 @@ public class RemoteTestBase {
     jmxReporter = JmxReporter.forRegistry(statistics.getRegistry()).build();
     jmxReporter.start();
     keepAliveSettings = new KeepAlive.Settings();
-    server = new RemoteServer(classLoader, new RemoteServer.Settings(statistics, keepAliveSettings));
+    socketSettings = new SocketSettings();
+    server = new RemoteServer(classLoader, new RemoteServer.Settings(statistics, keepAliveSettings, socketSettings));
     service = server.start(createServerSocket());
   }
 
@@ -95,7 +98,8 @@ public class RemoteTestBase {
   }
 
   static RemoteClient createClient(final ClassLoader classLoader) {
-    final RemoteClient.Settings clientSettings = new RemoteClient.Settings(SocketFactory.getDefault(), service.getSocketAddress(), statistics, keepAliveSettings);
+    final RemoteClient.Settings clientSettings = new RemoteClient.Settings(SocketFactory.getDefault(), service.getSocketAddress(), 
+                                                                           statistics, keepAliveSettings, socketSettings);
     return new RemoteClient(classLoader, clientSettings);
   }
 

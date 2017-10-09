@@ -85,7 +85,8 @@ public class RemoteClient implements AutoCloseable {
     final SocketFactory socketFactory;
     final SocketAddress endpoint;
     final StatisticsProvider statistics; 
-    final KeepAlive.Settings keepAlive;
+    final KeepAlive.Settings keepAliveSettings;
+    final SocketSettings socketSettings;
 
     /**
      * Remote client settings with default keep-alive settings.
@@ -93,7 +94,7 @@ public class RemoteClient implements AutoCloseable {
      * @param endpoint the socket address endpoint to connect to.
      */
     public Settings(final SocketFactory socketFactory, final SocketAddress endpoint) {
-      this(socketFactory, endpoint, new StatisticsProvider(), new KeepAlive.Settings());
+      this(socketFactory, endpoint, new StatisticsProvider(), new KeepAlive.Settings(), new SocketSettings());
     }
 
     /**
@@ -101,12 +102,24 @@ public class RemoteClient implements AutoCloseable {
      * @param endpoint the socket address endpoint to connect to.
      * @param statistics the statistics to use.
      * @param keepAliveSettings the keep-alive settings.
+     * @param socketSettings the socket settings.
      */
-    public Settings(final SocketFactory socketFactory, final SocketAddress endpoint, final StatisticsProvider statistics, final KeepAlive.Settings keepAliveSettings) {
+    public Settings(final SocketFactory socketFactory,
+                    final SocketAddress endpoint,
+                    final StatisticsProvider statistics,
+                    final KeepAlive.Settings keepAliveSettings,
+                    final SocketSettings socketSettings) {
       this.socketFactory = socketFactory;
       this.endpoint = endpoint;
       this.statistics = statistics;
-      this.keepAlive = keepAliveSettings;
+      this.keepAliveSettings = keepAliveSettings;
+      this.socketSettings = socketSettings;
+    }
+    
+    /** {@inheritDoc} */
+    @Override
+    public String toString() {
+      return String.format("Settings [endpoint=%s, keepAliveSettings=%s, socketSettings=%s]", endpoint, keepAliveSettings, socketSettings);
     }
   }
 
@@ -117,7 +130,7 @@ public class RemoteClient implements AutoCloseable {
   public RemoteClient(final ClassLoader classLoader, final Settings settings) {
     this.classLoader = classLoader;
     this.settings = settings;
-    this.keepAlive = new KeepAlive(settings.keepAlive, settings.statistics);
+    this.keepAlive = new KeepAlive(settings.keepAliveSettings, settings.statistics);
   }
 
   /**
@@ -154,6 +167,12 @@ public class RemoteClient implements AutoCloseable {
     return proxyObjects.remove(api);
   }
 
+  /** {@inheritDoc} */
+  @Override
+  public String toString() {
+    return String.format("RemoteClient [settings=%s]", settings);
+  }
+  
   /**
    * @return the keep-alive handler of this remote client.
    */
@@ -332,6 +351,7 @@ public class RemoteClient implements AutoCloseable {
 
     Connection createConnection() throws IOException {
       final Socket socket = settings.socketFactory.createSocket();
+      settings.socketSettings.applyTo(socket);
       socket.connect(settings.endpoint);
 
       final Connection connection = new Connection(Protocol.client(socket, classLoader));

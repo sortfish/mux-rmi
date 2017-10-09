@@ -29,6 +29,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import java.io.Closeable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -47,7 +48,7 @@ import muxrmi.Protocol.State;
  * will run on the same shared thread-pool, and can be stopped by calling {@code close()} on the keep-alive handler.
  * @author ReneAndersen
  */
-class KeepAlive implements AutoCloseable {
+public class KeepAlive implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(KeepAlive.class);
 
   private final Settings settings;
@@ -56,21 +57,44 @@ class KeepAlive implements AutoCloseable {
   private final ThreadFactory threadFactory;
   private final ScheduledExecutorService scheduler;
 
-  static class Settings extends ConfigurationSettings.FromSystemProperties {
-    static final String KEEP_ALIVE_PREFIX = KeepAlive.class.getPackage().getName() + ".keep-alive.";
+  /**
+   * Configuration settings for the keep-alive handler.
+   */
+  public static class Settings extends ConfigurationSettings {
+    /** The default prefix to use when reading settings from a {@link Properties} object. */
+    public static final String KEEP_ALIVE_PREFIX = "muxrmi.keep-alive.";
 
-    final LongValue intervalSec = new LongValue("interval", 10);
-    final LongValue marginSec = new LongValue("margin", 1);
-    final LongValue pollIntervalSec = new LongValue("poll-interval", 1);
+    /** The interval (in seconds) to send keep-alive packages. */
+    public final LongValue intervalSec = new LongValue("interval", 5);
+    
+    /** The precision margin (in seconds) for keep-alive packages. A keep-alive package can be sent when there's less than this time left of an interval. */
+    public final LongValue sendMarginSec = new LongValue("send-margin", 1);
+    
+    /** The precision margin (in seconds) for keep-alive packages. The connection is considered lost if the keep-alive interval is exceeded by this time. */
+    public final LongValue recvMarginSec = new LongValue("recv-margin", 5);
+    
+    /** The interval (in seconds) with which to run each keep-alive task. */
+    public final LongValue pollIntervalSec = new LongValue("poll-interval", 1);
 
-    Settings() {
+    /**
+     * Create a new settings object that reads settings from system properties with the prefix {@link #KEEP_ALIVE_PREFIX}.
+     */
+    public Settings() {
       super(KEEP_ALIVE_PREFIX);
-      reload();
+    }
+    
+    /**
+     * Create a new settings object that read settings from the specified reader.
+     * @param reader
+     */
+    public Settings(final ConfigurationSettings.Reader reader) {
+      super(reader);
     }
 
+    /** {@inheritDoc} */
     @Override
     public String toString() {
-      return String.format("%ss, %ss, %ss", intervalSec, marginSec, pollIntervalSec);
+      return String.format("%ss, %ss, %ss", intervalSec, sendMarginSec, pollIntervalSec);
     }
   }
 
@@ -161,6 +185,7 @@ class KeepAlive implements AutoCloseable {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public String toString() {
     return "KeepAlive [" + settings + "]";
@@ -209,7 +234,7 @@ class KeepAlive implements AutoCloseable {
         switch (state) {
           case ACCEPT:
             final long elapsedMillis = getElapsedMillis(sharedState.lastUpdateMillis);
-            final long intervalWithMarginMillis = SECONDS.toMillis(settings.intervalSec.get() + settings.marginSec.get());
+            final long intervalWithMarginMillis = SECONDS.toMillis(settings.intervalSec.get() + settings.recvMarginSec.get());
           if (elapsedMillis > intervalWithMarginMillis) {
               if (logger.isWarnEnabled()) logger.warn(protocol + " Connection keep-alive margin exceeded: {}ms > {}ms",
                   elapsedMillis, intervalWithMarginMillis);
@@ -221,7 +246,7 @@ class KeepAlive implements AutoCloseable {
           case INITIAL:
           case RUNNING:
             final long remainingMillis = getRemainingMillis(sharedState.lastUpdateMillis);
-            if (remainingMillis <= SECONDS.toMillis(settings.marginSec.get())) {
+            if (remainingMillis <= SECONDS.toMillis(settings.sendMarginSec.get())) {
               protocol.sendContinue();
             } else {
               rescheduleMillis = remainingMillis;

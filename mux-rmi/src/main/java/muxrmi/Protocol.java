@@ -644,9 +644,14 @@ public final class Protocol implements AutoCloseable {
       try {
         write(Command.ERROR, e);
       } catch (final Exception e2) {
-        if (logger.isErrorEnabled()) logger.error("{} Error sending ERROR response ({}): {}", this, e,
-            (logger.isDebugEnabled()) ? e2 : e2.toString()); //$NON-NLS-1$
-        throw e2;
+        if (logger.isErrorEnabled()) {
+          final String msg = this + " Error sending ERROR response: " + e;
+          if (logger.isDebugEnabled())
+            logger.debug(msg, e2);
+          else
+            logger.error("{}: {}", msg, e2.toString());
+          throw e2;
+        }
       }
     } else {
       throw e;
