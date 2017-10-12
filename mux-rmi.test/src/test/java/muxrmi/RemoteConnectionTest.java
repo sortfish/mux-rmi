@@ -23,6 +23,7 @@
  */
 package muxrmi;
 
+import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.rmi.Remote;
@@ -36,8 +37,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import muxrmi.RemoteClient;
-
 /**
  * @author ReneAndersen
  */
@@ -48,6 +47,12 @@ public class RemoteConnectionTest extends RemoteTestBase {
 
   public interface API extends Remote {
     <T> T echo(T arg);
+    
+    interface Predicate<T> extends Serializable {
+      boolean apply(T arg);
+    }
+    
+    <T> boolean apply(T arg, Predicate<T> pred);
 
     <E extends Exception> void throwException(E e) throws E;
 
@@ -58,6 +63,11 @@ public class RemoteConnectionTest extends RemoteTestBase {
     @Override
     public <T> T echo(final T arg) {
       return arg;
+    }
+    
+    @Override
+    public <T> boolean apply(final T arg, final Predicate<T> pred) {
+      return pred.apply(arg);
     }
 
     @Override
@@ -230,5 +240,39 @@ public class RemoteConnectionTest extends RemoteTestBase {
     final Object arg = Integer.valueOf(42);
     final Object result = api.callback(Method.ECHO_ON_RETURNED_CALLBACK, cbapi, arg);
     Assert.assertEquals(arg, result);
+  }
+  
+  private static class MutableObj implements Serializable {
+    private static final long serialVersionUID = 1L;
+    int val; { inc(); }
+    void inc() {
+      ++val;
+    }
+    static final class ExpectedValue implements API.Predicate<MutableObj> {
+      private static final long serialVersionUID = 1L;
+      private final int expected;
+      ExpectedValue(final int expected) {
+        this.expected = expected;
+      }
+      
+      @Override
+      public boolean apply(final MutableObj arg) {
+        if (arg.val != expected) {
+          logger.error("Expected mutable object to have a value of {} but it was {}", expected, arg.val);
+          return false;
+        }
+        return true;
+      }
+    }
+  }
+  
+  @Test
+  public void testObjectInstanceRetransmit() throws Exception {
+    logger.info("Running testObjectInstanceRetransmit()");
+    final MutableObj obj = new MutableObj();
+    while (obj.val < 10) {
+      Assert.assertTrue(api.apply(obj, new MutableObj.ExpectedValue(obj.val)));
+      obj.inc();
+    }
   }
 }

@@ -44,6 +44,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +56,8 @@ import org.slf4j.LoggerFactory;
 public final class Protocol implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(Protocol.class);
 
+  private static final AtomicLong ID = new AtomicLong();
+  
   // The current shared state of a protocol instance.
   enum State { INITIAL, ACCEPT, RUNNING, CLOSED }
 
@@ -95,35 +98,46 @@ public final class Protocol implements AutoCloseable {
     }
   }
 
+  private static final class Identity {
+    private final long id = ID.getAndIncrement();
+    
+    @Override
+    public String toString() {
+      return "Protocol#" + id;
+    }
+  }
+  
   private final Set<Class<?>> remoteClasses = new HashSet<>();
+  private final Identity identity = new Identity();
   private final Context ctx;
   private final boolean isServer;
   private final boolean topLevel;
   
   private volatile boolean isClosed = false;
 
-  private Protocol(final Context parentContext) {
-    this.ctx = new Context(parentContext);
-    this.isServer = false;
-    this.topLevel = false;
+  private Protocol(final Context ctx, final boolean isServer, final boolean topLevel) {
+    this.ctx = ctx;
+    this.isServer = isServer;
+    this.topLevel = topLevel;
 
+    logger.debug("{}", this); //$NON-NLS-1$
+  }
+
+  private Protocol(final Context parentContext) {
+    this(new Context(parentContext), false, false);
     ctx.state.update(INITIAL);
   }
 
   /**
-   * Create a top-level protocl instance which communicates on the specified socket connection.
+   * Create a top-level protocol instance which communicates on the specified socket connection.
    * @param isServer {@code true} iff the protocol instance should be in server mode, {@code false} otherwise.
    * @param socket an accepted socket connection to the remote client.
-   * @param classLoader TODO
+   * @param classLoader The class loader to use to load remote class references.
    */
   private Protocol(final boolean isServer, final Socket socket, final ClassLoader classLoader) {
-    this.ctx = new Context(socket, classLoader);
-    this.isServer = isServer;
-    this.topLevel = true;
-
-    logger.debug("{} Created", this); //$NON-NLS-1$
+    this(new Context(socket, classLoader), isServer, true);
   }
-
+  
   /**
    * Create a top-level client-side protocol instance on the specified socket connection.
    * @param socket the socket.
@@ -303,7 +317,7 @@ public final class Protocol implements AutoCloseable {
   public synchronized void close() {
     if (isClosed) return;
     
-    logger.debug("{} Closed", this); //$NON-NLS-1$
+    logger.debug("{} Closed", identity); //$NON-NLS-1$
     isClosed = true;
     if (topLevel) {
       try {
@@ -319,10 +333,10 @@ public final class Protocol implements AutoCloseable {
   /** {@inheritDoc} */
   @Override
   public String toString() {
-    return "Protocol [" //$NON-NLS-1$
-         + (isServer ? "server" : "client") //$NON-NLS-1$ //$NON-NLS-2$
-         + ", " + (topLevel ? "topLevel" : "nested") //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-         + ", connection=" + ctx.con + "]"; //$NON-NLS-1$ //$NON-NLS-2$
+    return identity + " ["
+         + (isServer ? "server" : "client")
+         + ", " + (topLevel ? "topLevel" : "nested")
+         + ", connection=" + ctx.con + "]";
   }
 
   /** {@inheritDoc} */
@@ -586,7 +600,7 @@ public final class Protocol implements AutoCloseable {
     ctx.state.update(RUNNING);
     final Command command = Command.get(cmd);
 
-    if (logger.isTraceEnabled()) logger.trace("{} <- {}", this, command); //$NON-NLS-1$
+    if (logger.isTraceEnabled()) logger.trace("{} <- {}", identity, command); //$NON-NLS-1$
     return command;
   }
 
@@ -598,7 +612,7 @@ public final class Protocol implements AutoCloseable {
   private final Object readObject() throws Exception {
     final Object res = ctx.con.in().readObject();
 
-    if (logger.isTraceEnabled()) logger.trace("{} <- {}", this, res.toString()); //$NON-NLS-1$
+    if (logger.isTraceEnabled()) logger.trace("{} <- {}", identity, res); //$NON-NLS-1$
     return res;
   }
 
@@ -609,9 +623,10 @@ public final class Protocol implements AutoCloseable {
    * @throws Exception if the command could not be written.
    */
   private final synchronized void write(final Protocol.Command command, final Object... args) throws IOException {
-    if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", new Object[] {this, command, Arrays.toString(args)}); //$NON-NLS-1$
+    if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", new Object[] {identity, command, Arrays.toString(args)}); //$NON-NLS-1$
 
     final ObjectOutputStream out = ctx.con.out();
+    out.reset();
     out.write(command.get());
     for (final Object arg : args) {
       out.writeObject(arg);
@@ -850,6 +865,7 @@ public final class Protocol implements AutoCloseable {
    */
   private void setRemote(final Class<?> remoteClass) {
     remoteClasses.add(remoteClass);
+    if (logger.isTraceEnabled()) logger.trace("Remotes: {} -> {}", remoteClass, remoteClasses);
   }
 
 }
