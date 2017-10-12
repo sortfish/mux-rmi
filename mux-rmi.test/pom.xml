@@ -1,14 +1,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <artifactId>mux-rmi.test</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <name>Mux-RMI Tests</name>
   <description>Test project for Mux-RMI</description>
   <dependencies>
   	<dependency>
   		<groupId>com.github.sortfish</groupId>
   		<artifactId>mux-rmi</artifactId>
-  		<version>[0.2,0.3)</version>
+  		<version>[0.2.1,0.3)</version>
   	</dependency>
   	<dependency>
   		<groupId>ch.qos.logback</groupId>
