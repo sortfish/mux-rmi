@@ -35,11 +35,12 @@ import easysettings.ConfigurationSettings;
 
 /**
  * This class collects and applies socket settings to socket instances.
+ * @author Rene Andersen
  */
 class SocketSettings extends ConfigurationSettings {
   private static final Logger logger = LoggerFactory.getLogger(SocketSettings.class);
 
-  private static final String PREFIX = "muxrmi."; //$NON-NLS-1$
+  private static final String PREFIX = "muxrmi.";
 
   /** Socket read timeout (SO_TIMEOUT) , in seconds. */
   public final IntegerValue soTimeout = new IntegerValue("so-timeout", 0);
@@ -52,7 +53,7 @@ class SocketSettings extends ConfigurationSettings {
 
   SocketSettings() {
     super(PREFIX);
-    logger.info("SocketSettings: {}", this); //$NON-NLS-1$
+    logger.info("SocketSettings: {}", this);
   }
 
   SocketSettings(ConfigurationSettings.Reader reader) {
@@ -60,13 +61,13 @@ class SocketSettings extends ConfigurationSettings {
   }
   
   void applyTo(final Socket socket) {
-    if (logger.isDebugEnabled()) logger.debug("Applying socket settings to '{}': {}", socket, this); //$NON-NLS-1$
+    if (logger.isDebugEnabled()) logger.debug("Applying socket settings to '{}': {}", socket, this);
     try {
       socket.setSoTimeout((int)SECONDS.toMillis(soTimeout.get()));
       socket.setSoLinger(soLinger.get() >= 0, soLinger.get());
       socket.setTcpNoDelay(tcpNoDelay.get());
     } catch (final SocketException e) {
-      logger.error("Failed to apply socket settings: " + this, e); //$NON-NLS-1$
+      logger.error("Failed to apply socket settings: " + this, e);
     }
   }
 

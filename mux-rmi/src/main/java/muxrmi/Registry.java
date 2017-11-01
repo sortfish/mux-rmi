@@ -32,8 +32,16 @@ import muxrmi.Protocol.ClassRef;
 import muxrmi.Protocol.MethodRef;
 
 /**
- * A registry of methods and object references which are accessible remotely.
- * @author ReneAndersen
+ * A registry of methods and object references which are accessible in a specific remote context.
+ * <p/>
+ * The registry consists of two things:
+ * <ul>
+ * <li>A mapping of named methods which can be invoked remotely</li>
+ * <li>A mapping of named references to remote object instances</li>
+ * </ul>
+ * A registry can be created in the context of a "parent" registry. In this case all methods and
+ * object references from the parent registry are also available in the "child" registry.
+ * @author Rene Andersen
  */
 class Registry {
 
@@ -43,19 +51,38 @@ class Registry {
   /** A map with the callable object references */
   private final Map<String, Object> references = new HashMap<>();
 
+  /** The (optional) parent registry */
   private final Registry parent;
 
+  /**
+   * Create a new registry with the specified parent registry.
+   * @param parentRegistry the parent registry.
+   */
   Registry(final Registry parentRegistry) {
     this.parent = parentRegistry;
   }
 
+  /**
+   * Create a new top-level registry.
+   */
   Registry() {
     this.parent = null;
   }
 
+  /**
+   * Initialize this registry by copying all method and object references from another "initial" registry.
+   * @param initialRegistry the initial registry to copy from.
+   */
   void init(final Registry initialRegistry) {
     methods.putAll(initialRegistry.methods);
     references.putAll(initialRegistry.references);
+  }
+  
+  /**
+   * @return {@code true} iff this is a top-level context (with no parent context).
+   */
+  boolean isTopLevel() {
+    return parent == null;
   }
 
   /**
@@ -107,22 +134,33 @@ class Registry {
   }
 
   /**
-   * @param apiClass
+   * Register all methods of a class reference in the method registry.
+   * @param classRef the class reference.
    */
-  void registerMethods(final ClassRef apiClass) {
-    for (final Method method : apiClass.classType.getMethods()) {
-      methods.put(MethodRef.id(apiClass, method.getName()), method);
+  void registerMethods(final ClassRef classRef) {
+    for (final Method method : classRef.classType.getMethods()) {
+      methods.put(MethodRef.id(classRef, method.getName()), method);
     }
   }
 
-  boolean unregisterMethods(final ClassRef apiClass) {
+  /**
+   * Unregister all methods of a class reference and remove them from this registry.
+   * @param classRef the class reference.
+   * @return {@code true} iff all methods in the class reference were successfully removed, {@code false} otherwise.
+   */
+  boolean unregisterMethods(final ClassRef classRef) {
     boolean status = true;
-    for (final Method method : apiClass.classType.getMethods()) {
-      status = methods.remove(MethodRef.id(apiClass, method.getName())) != null && status;
+    for (final Method method : classRef.classType.getMethods()) {
+      status = methods.remove(MethodRef.id(classRef, method.getName())) != null && status;
     }
     return status;
   }
 
+  /**
+   * Find a {@link Method} object for the specified method ID.
+   * @param methodId the ID of the method to find, as created by {@link MethodRef#id(ClassRef, String)}.
+   * @return the method with the specified ID, or {@code null} if it doesn't exist.
+   */
   Method findMethod(final String methodId) {
     Method method = methods.get(methodId);
     if (method == null && parent != null) {
@@ -132,10 +170,10 @@ class Registry {
   }
 
   /**
-   * Find a {@link Method} object for the specified method name.
-   * @param methodId the method identifier.
-   * @return the found method object.
-   * @throws NotBoundException if no method is found for the specified method name.
+   * Find a {@link Method} object for the specified method ID.
+   * @param methodId the method ID, as created by {@link MethodRef#id(ClassRef, String)}.
+   * @return the method with the specified ID.
+   * @throws NotBoundException if no method is found for the specified method ID.
    */
   Method getMethod(final String methodId) throws NotBoundException {
     final Method method = findMethod(methodId);

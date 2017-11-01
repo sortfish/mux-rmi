@@ -38,6 +38,15 @@ import org.slf4j.LoggerFactory;
 
 /**
  * This class represents an active connection to a remote endpoint.
+ * <p/>
+ * A connection consist of a connected socket and lazily initialized object streams
+ * based on the input/output streams of this socket. The class loader passed into
+ * the connection class will be used to load all objects read from the object
+ * input stream.
+ * <p/>
+ * The class is not public as it is only used by remote servers and clients.
+ * 
+ * @author Rene Andersen
  */
 final class Connection implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(Connection.class);
@@ -80,7 +89,7 @@ final class Connection implements AutoCloseable {
     } catch (final IOException e) {
       throw e;
     } catch (final Exception e) {
-      throw new IOException(e.getMessage(), e);
+      throw new IOException("Error getting object input stream: " + e.getMessage(), e);
     }
   }
 
@@ -90,7 +99,7 @@ final class Connection implements AutoCloseable {
     } catch (final IOException e) {
       throw e;
     } catch (final Exception e) {
-      throw new IOException(e.getMessage(), e);
+      throw new IOException("Error getting object output stream" + e.getMessage(), e);
     }
   }
 

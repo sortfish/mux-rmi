@@ -44,9 +44,21 @@ import muxrmi.Protocol.SharedState;
 import muxrmi.Protocol.State;
 
 /**
- * Implementation of a keep-alive handler for remote connections. All keep-alive tasks started by an instance of this class
- * will run on the same shared thread-pool, and can be stopped by calling {@code close()} on the keep-alive handler.
- * @author ReneAndersen
+ * Implementation of a keep-alive handler for remote connections.
+ * <p/>
+ * Instances of {@link Protocol} can be passed to a keep-alive handler by calling
+ * {@link #start(Protocol)}. This will create a keep-alive task that monitors
+ * that the connection doesn't sit idle for longer than the time specified by the
+ * instance's {@link Settings}.
+ * If the idle duration is exceeded the protocol instance will be instructed to 
+ * send a continuation command to the remote party.
+ * <p/>
+ * All keep-alive tasks started by an instance of this class will run in the same 
+ * shared thread-pool. Individual keep-alive tasks can be stopped by calling 
+ * {@link #stop(Protocol)}. The entire keep-alive handler can be stopped by 
+ * calling {@code close()}.
+ * 
+ * @author Rene Andersen
  */
 public class KeepAlive implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(KeepAlive.class);
@@ -197,11 +209,18 @@ public class KeepAlive implements AutoCloseable {
     close();
   }
 
+  /**
+   * A runnable keep-alive task with the responsibility to keep one remote connection alive.
+   */
   final class Task implements Runnable, Closeable {
     final Protocol protocol;
 
     volatile boolean closed = false;
 
+    /**
+     * Create a keep-alive task for the specified {@link Protocol} instance.
+     * @param protocol the protocol instance.
+     */
     private Task(final Protocol protocol) {
       this.protocol = protocol;
 
@@ -216,6 +235,21 @@ public class KeepAlive implements AutoCloseable {
       return SECONDS.toMillis(settings.intervalSec.get()) - getElapsedMillis(lastUpdateMillis);
     }
 
+    /**
+     * Run the keep alive task once. The behavior depends on the current state of the
+     * {@link Protocol} instance being monitored:
+     * <ul>
+     * <li>ACCEPT: Check how long it's been since the last command was received, and
+     *             close the connection if the duration exceeds the keep-alive package 
+     *             interval (+ a receive margin).</li>
+     * <li>INITIAL/RUNNING: Check how long it's been since the last keep-alive package
+     *             was sent, and send a new keep-alive package if the duration exceeds
+     *             the keep-alive package interval (- a send margin).</li>
+     * <li>CLOSED: Terminate.
+     * </ul>
+     * Unless the current state is CLOSED the task will reschedule itself to run again
+     * after the configured poll interval has passed.
+     */
     @Override
     public void run() {
       if (closed) {
@@ -249,7 +283,7 @@ public class KeepAlive implements AutoCloseable {
             if (remainingMillis <= SECONDS.toMillis(settings.sendMarginSec.get())) {
               protocol.sendContinue();
             } else {
-              rescheduleMillis = remainingMillis;
+              rescheduleMillis = Math.min(rescheduleMillis, remainingMillis);
             }
             break;
 

@@ -27,8 +27,9 @@ import java.util.Arrays;
 
 
 /**
- * A {@link ClassLoader} that will delegate to several other class loaders when searching for a class name.
- * @author ReneAndersen
+ * A {@link ClassLoader} that will invoke a prioritized list of class loaders 
+ * when trying to find the class for a class name.
+ * @author Rene Andersen
  */
 class RemoteProxyClassLoader extends ClassLoader {
   private final ClassLoader[] classLoaders;

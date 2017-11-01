@@ -27,20 +27,18 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A generic thread factory builder that makes it possible to create a thread factory with control of pretty much every aspect of thread creation.
- * <p/>
- * A class like this should have been part of the standard libraries as it is pure boiler plate code.
+ * A generic thread factory builder that makes it possible to create a thread factory with
+ * control of pretty much every aspect of thread creation.
  * <p/>
  * The thread factories created by this builder will produce threads with names formatted as:
- * <p/>
- * {@code <factory-name-prefix>-<factory#>-<thread-name-prefix>-<thread#>}
- * <p/>
+ * 
+ * <pre>{factory-name-prefix}-{factory#}-{thread-name-prefix}-{thread#}</pre>
+ * 
  * where {@code factory#} and {@code thread#} are running sequence numbers.
- * @author ReneAndersen
+ * @author Rene Andersen
  */
 final class ThreadFactoryBuilder {
   private final AtomicInteger factoryNumber;
-
   private String factoryNamePrefix;
   private String threadNamePrefix;
   private boolean isDaemon = true;

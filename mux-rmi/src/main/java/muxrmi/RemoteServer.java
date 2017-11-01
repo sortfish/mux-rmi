@@ -46,15 +46,16 @@ import org.slf4j.LoggerFactory;
 import muxrmi.Protocol.ClassRef;
 
 /**
- * Implementation of a remote server.
+ * Implementation of a Mux-RMI remote server.
  * <p/>
  * A remote server can start a remote {@link Service} on a {@link ServerSocket}. This service will serve incoming requests
- * on the server socket until it is closed by calling {@link Service#close()}.
+ * on the server socket until it is closed by calling {@link Service#close()}. These requests will be executed as tasks
+ * by the build-in thread pool.
  * <p/>
  * A remote server instance controls the lifetime of all remote services created by it, and will close all running
  * services when it is itself closed.
  *
- * @author ReneAndersen
+ * @author Rene Andersen
  */
 public class RemoteServer implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(RemoteServer.class);
@@ -68,7 +69,6 @@ public class RemoteServer implements AutoCloseable {
   private final Statistics stats;
   private final KeepAlive keepAlive;
   private final ClassLoader classLoader;
-
 
   private List<ClassRef> findRemoteInterfaces(final Class<?> cls) throws InvalidClassException {
     final List<ClassRef> res = new ArrayList<>();
@@ -109,6 +109,7 @@ public class RemoteServer implements AutoCloseable {
     }
 
     /**
+     * Create configuration settings with the specified statistics provider, keep-alive settings and socket settings.
      * @param statistics the statistics provider.
      * @param keepAliveSettings the keep-alive settings.
      * @param socketSettings the socket settings.
@@ -121,14 +122,13 @@ public class RemoteServer implements AutoCloseable {
       this.socketSettings = socketSettings;
     }
     
-    /** {@inhericDoc} */
     public String toString() {
       return String.format("Settings [keepAliveSettings=%s, socketSettings=%s]", keepAliveSettings, socketSettings);
     }
   }
 
   /**
-   * Create a remote server.
+   * Create a new remote server with the specified class loader and configuration settings.
    * @param classLoader a class loader for the objects read on the remote protocol.
    * @param settings the configuration settings for the remote server.
    */
@@ -161,7 +161,7 @@ public class RemoteServer implements AutoCloseable {
       return classes;
     }
     else
-      throw new InvalidClassException(api.getClass().getName(), "No interfaces extend '" + Remote.class.getName() +"'"); //$NON-NLS-1$ //$NON-NLS-2$
+      throw new InvalidClassException(api.getClass().getName(), "No interfaces extend '" + Remote.class.getName() +"'");
   }
 
   /**
@@ -196,7 +196,7 @@ public class RemoteServer implements AutoCloseable {
       super(statistics);
     }
     
-    Value threadCount = new Value(RemoteServer.class, "thread-count") { //$NON-NLS-1$
+    Value threadCount = new Value(RemoteServer.class, "thread-count") {
       @Override
       protected int get() {
         if (executor instanceof ThreadPoolExecutor) {
@@ -206,7 +206,7 @@ public class RemoteServer implements AutoCloseable {
       }
     };
 
-    Counter connectionCount = new Counter(RemoteServer.class, "connection-count"); //$NON-NLS-1$
+    Counter connectionCount = new Counter(RemoteServer.class, "connection-count");
   }
 
   /**
@@ -246,9 +246,8 @@ public class RemoteServer implements AutoCloseable {
    * Start a remote {@link Service} listening on the specified server socket.
    * @param serverSocket the server socket.
    * @return An {@link Service} reference to the remote server instance.
-   * @throws IOException
    */
-  public synchronized Service start(final ServerSocket serverSocket) throws IOException {
+  public synchronized Service start(final ServerSocket serverSocket) {
     final Acceptor acceptor = new Acceptor(serverSocket);
     services.add(acceptor);
     executor.execute(acceptor);
@@ -283,6 +282,14 @@ public class RemoteServer implements AutoCloseable {
     return keepAlive;
   }
 
+  /**
+   * An acceptor is a runnable task which accepts remote socket connections 
+   * from a listening server socket. Each time a connection has been accepted
+   * a new {@link Connection} object is created to handle the new connection.
+   * </p>
+   * The {@link #run()} method will loop until the server socket is closed,
+   * or until an non-{@link Exception} error is thrown.
+   */
   private class Acceptor implements Runnable, Service {
     private final Map<Object, Connection> connections = new ConcurrentHashMap<>();
     private final ServerSocket serverSocket;
@@ -318,7 +325,7 @@ public class RemoteServer implements AutoCloseable {
             if (serverSocket.isClosed()) {
               return;
             } else {
-              logger.error("Error in remote server: " + e.getMessage(), e); //$NON-NLS-1$
+              logger.error("Error in remote server: " + e.getMessage(), e);
             }
           }
         } while (true);
@@ -326,7 +333,7 @@ public class RemoteServer implements AutoCloseable {
         try {
           serverSocket.close();
         } catch (final Exception e) {
-          logger.error("Error closing server socket in remote server", e); //$NON-NLS-1$
+          logger.error("Error closing server socket in remote server", e);
         }
       }
     }
@@ -338,7 +345,7 @@ public class RemoteServer implements AutoCloseable {
         services.remove(this);
         serverSocket.close();
       } catch (final IOException e) {
-        logger.error("Error closing server socket: " + serverSocket, e); //$NON-NLS-1$
+        logger.error("Error closing server socket: " + serverSocket, e);
       }
 
       for (final Connection connection : connections.values()) {
@@ -365,6 +372,11 @@ public class RemoteServer implements AutoCloseable {
     }
   }
 
+  /**
+   * An instance of the connection class is a runnable task that handles communication
+   * with a remote client. It does this by invoking {@link Protocol#run()} on its server-side 
+   * protocol instance.
+   */
   private static class Connection implements Runnable, AutoCloseable {
     private final Protocol protocol;
     private final Acceptor acceptor;
@@ -385,7 +397,7 @@ public class RemoteServer implements AutoCloseable {
         protocol.run();
       } catch (final Exception e) {
         if (!protocol.isClosed()) {
-          logger.error("{} Error in remote request: {}", this, logger.isDebugEnabled() ? e : e.toString()); //$NON-NLS-1$
+          logger.error("{} Error in remote request: {}", this, logger.isDebugEnabled() ? e : e.toString());
         }
       } finally {
         close();

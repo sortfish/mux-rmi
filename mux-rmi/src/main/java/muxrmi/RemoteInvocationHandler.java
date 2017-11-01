@@ -34,10 +34,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Abstract base class for a remote reflective {@link InvocationHandler invocation handler}. This class will handle invocation of
- * methods not in the declared remote interface (such as methods inherited from {@link Object}) and forward the remote method
- * invocations to the abstract {@code invokeRemote(Method, Object[])} method which descendants must implement.
- * @author ReneAndersen
+ * Abstract base class for a remote reflective {@link InvocationHandler invocation handler}.
+ * <p/>
+ * This class will handle invocation of methods not in the declared remote interface (such as
+ * methods inherited from {@link Object}) and forward the remote method invocations to the 
+ * abstract {@code invokeRemote(Method, Object[])} method which descendants must implement.
+ * @author Rene Andersen
  */
 abstract class RemoteInvocationHandler implements InvocationHandler {
   private static final Logger logger = LoggerFactory.getLogger(RemoteInvocationHandler.class);
@@ -73,18 +75,18 @@ abstract class RemoteInvocationHandler implements InvocationHandler {
       if (method.getDeclaringClass().isAssignableFrom(getClass())) {
         return method.invoke(this, args);
       }
-      throw new UnsupportedOperationException("Unsupported operation on remote class of type '" + classType + ": " + method); //$NON-NLS-1$ //$NON-NLS-2$
+      throw new UnsupportedOperationException("Unsupported operation on remote class of type '" + classType + ": " + method);
     } catch (final InvocationTargetException e) {
       throw e.getTargetException();
     } catch (final Exception e) {
-      if (logger.isDebugEnabled()) logger.debug("Error in remote method invocation: " + toString(method, args), e); //$NON-NLS-1$
+      if (logger.isDebugEnabled()) logger.debug("Error in remote method invocation: " + toString(method, args), e);
       throw getMethodCompatibleException(method, e);
     }
   }
 
   @Override
   public String toString() {
-    return "RemoteInvocationHandler [classType=" + classType.getName() + "]"; //$NON-NLS-1$ //$NON-NLS-2$
+    return "RemoteInvocationHandler [classType=" + classType.getName() + "]";
   }
 
   /**
@@ -98,6 +100,19 @@ abstract class RemoteInvocationHandler implements InvocationHandler {
   protected abstract Object invokeRemote(final Method method,
                                          final Object[] args) throws InvocationTargetException, Exception;
 
+  /**
+   * This method will check if an exception is compatible with the exception types declared by
+   * the specified method.
+   * <ul>
+   * <li>If a compatible exception type is found the exception will be returned as-is.</li>
+   * <li>Otherwise, if the method throws {@link RemoteException} the exception will be wrapped
+   *     in an instance of this class.</li>
+   * <li>Otherwise, the exception will be wrapped in an instance of {@link RuntimeException}.</li>
+   * </ul>
+   * @param method the method declaring the compatible exception types.
+   * @param e the exception to check for compatibility.
+   * @return the resulting compatible exception.
+   */
   private Exception getMethodCompatibleException(final Method method, final Exception e) {
     Exception res = null;
     for (final Class<?> exceptionType : method.getExceptionTypes()) {

@@ -50,18 +50,34 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Common client/server implementation of the remote connection protocol
- * @author ReneAndersen
+ * Common client/server implementation of the remote connection protocol.
+ * <p/>
+ * The Mux-RMI protocol is inherently symmetric with each endpoint being
+ * able to both send and receive function invocations. Therefore this
+ * class contains methods to both invoke remote methods and to run an
+ * event loop for reading and dispatching remote commands.
+ * <p/>
+ * An instance of this class is created as either a client or a server,
+ * and can be top-level or embedded. An embedded protocol instance 
+ * inherits the context of its parent protocol instance, and has access
+ * to the same set of exposed remote object references etc:
+ * <p/>
+ * When a callback is performed from within a remote object invocation 
+ * received by a protocol server instance, a new embedded remote client
+ * instance is create to invoke the remote method. Similarly when a 
+ * remote client receives a callback invocation response to a remote 
+ * method invocation it will create a new embedded remote server
+ * instance to handle the method invocation.
+ * 
+ * @author Rene Andersen
  */
 public final class Protocol implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(Protocol.class);
 
-  private static final AtomicLong ID = new AtomicLong();
-  
-  // The current shared state of a protocol instance.
+  /** The current state of a protocol instance. */
   enum State { INITIAL, ACCEPT, RUNNING, CLOSED }
 
-  // Shared state between nested protocol instances.
+  /** Shared state between nested protocol instances. */
   static class SharedState {
     volatile State state = INITIAL;
     volatile long lastUpdateMillis = System.currentTimeMillis();
@@ -76,20 +92,35 @@ public final class Protocol implements AutoCloseable {
     return ctx.state;
   }
 
-  // The context of a protocol instances is a Registry, with the following additional elements:
-  // - A Connection object.
-  // - A SharedState object.
+  /**
+   * The context of a protocol instances is a {@link Registry}, with the following additional elements:
+   * <ul>
+   * <li>A {@link Connection} object.</li>
+   * <li>A {@link SharedState} object.</li>
+   * </ul>
+   * Like a registry, the context object can be either top-level or a child of a parent context.
+   */
   private static class Context extends Registry {
     final Connection con;
     final SharedState state;
     final ClassLoader classLoader;
 
+    /**
+     * Create a new top-level context for the specified socket connection and class loader.
+     * @param socket the connected socket.
+     * @param classLoader the class loader.
+     */
     Context(final Socket socket, final ClassLoader classLoader) {
       this.con = new Connection(socket, classLoader);
       this.state = new SharedState();
       this.classLoader = classLoader;
     }
 
+    /**
+     * Create a child context of the specified parent context. The connection, shared state 
+     * and class loader of the new context will be taken from the parent context.
+     * @param parent the parent context.
+     */
     Context(final Context parent) {
       super(parent);
       this.con = parent.con;
@@ -98,7 +129,17 @@ public final class Protocol implements AutoCloseable {
     }
   }
 
+  /**
+   * Unique identity of a remote protocol instance.
+   * <p/>
+   * The unique identity consists of a sequence number which is assigned from
+   * a global counter every time a new identity instance is created.
+   * <p/>
+   * This ID is printed in log statements to make it easy to track activity
+   * of a specific protocol instance.
+   */
   private static final class Identity {
+    private static final AtomicLong ID = new AtomicLong();
     private final long id = ID.getAndIncrement();
     
     @Override
@@ -115,34 +156,44 @@ public final class Protocol implements AutoCloseable {
   
   private volatile boolean isClosed = false;
 
-  private Protocol(final Context ctx, final boolean isServer, final boolean topLevel) {
+  /**
+   * Create a new protocol instance with the specified context. The boolean parameters
+   * {@code isServer} is used to determine certain aspects of the protocol behavior.
+   * @param ctx the context.
+   * @param isServer {@code true} iff the protocol instance should be in server mode.
+   */
+  private Protocol(final Context ctx, final boolean isServer) {
     this.ctx = ctx;
     this.isServer = isServer;
-    this.topLevel = topLevel;
+    this.topLevel = ctx.isTopLevel();
 
     logger.debug("{}", this); //$NON-NLS-1$
   }
 
+  /**
+   * Create a new child protocol instance based on the specified parent context.
+   * @param parentContext the parent context.
+   */
   private Protocol(final Context parentContext) {
-    this(new Context(parentContext), false, false);
+    this(new Context(parentContext), false);
     ctx.state.update(INITIAL);
   }
 
   /**
-   * Create a top-level protocol instance which communicates on the specified socket connection.
-   * @param isServer {@code true} iff the protocol instance should be in server mode, {@code false} otherwise.
-   * @param socket an accepted socket connection to the remote client.
-   * @param classLoader The class loader to use to load remote class references.
+   * Create a top-level protocol instance that communicates on the specified socket connection.
+   * @param isServer {@code true} iff the protocol instance should be in server mode.
+   * @param socket an accepted socket connection to the remote party.
+   * @param classLoader The class loader to use when loading classes.
    */
   private Protocol(final boolean isServer, final Socket socket, final ClassLoader classLoader) {
-    this(new Context(socket, classLoader), isServer, true);
+    this(new Context(socket, classLoader), isServer);
   }
   
   /**
    * Create a top-level client-side protocol instance on the specified socket connection.
    * @param socket the socket.
-   * @param classLoader a class loader for the objects read on the remote protocol.
-   * @return the protocol instance.
+   * @param classLoader the class loader to use when loading classes.
+   * @return the new protocol instance.
    */
   static Protocol client(final Socket socket, final ClassLoader classLoader) {
     return new Protocol(false, socket, classLoader);
@@ -151,9 +202,9 @@ public final class Protocol implements AutoCloseable {
   /**
    * Create a top-level server-side protocol instance on the specified socket connection.
    * @param socket the socket.
-   * @param registry the initial {@link Registry}.
-   * @param classLoader a class loader for the objects read on the remote protocol.
-   * @return the protocol instance.
+   * @param registry a {@link Registry} describing the methods which are available for remote invocation.
+   * @param classLoader the class loader to use when loading classes.
+   * @return the new protocol instance.
    */
   static Protocol server(final Socket socket, final Registry registry, final ClassLoader classLoader) {
     final Protocol protocol = new Protocol(true, socket, classLoader);
@@ -194,7 +245,7 @@ public final class Protocol implements AutoCloseable {
   /**
    * Check the the specified class is registered remotely.
    * @param classType the class type to check.
-   * @throws NotBoundException if the class was not registed remotely.
+   * @throws NotBoundException if the class was not registered remotely.
    * @throws Exception any exception thrown during the remote call.
    */
   void bind(final Class<?> classType) throws NotBoundException, Exception {
@@ -206,6 +257,7 @@ public final class Protocol implements AutoCloseable {
    * @param classRef a {@link ClassRef} for the class of the invoked method.
    * @param method the {@link Method} to invoke.
    * @return the return value from the method invocation.
+   * @throws NotBoundException if the method or its class reference was not registered remotely.
    * @throws InvocationTargetException wrapping any exception thrown by the method.
    * @throws Exception any other exception that occurred during the method invocation.
    */
@@ -215,7 +267,7 @@ public final class Protocol implements AutoCloseable {
 
   /**
    * Send a continuation command to the remote party.
-   * @throws IOException
+   * @throws IOException if the command could not be written.
    */
   void sendContinue() throws IOException {
     write(Command.CONTINUE);
@@ -227,24 +279,8 @@ public final class Protocol implements AutoCloseable {
    * @return a proxy stub for the remote API.
    * @throws InvalidClassException if the specified class does not implement the {@link Remote} interface.
    */
-  @SuppressWarnings("unchecked")
   <API> API createProxy(final Class<API> apiClass) throws InvalidClassException {
-    return (API) createProxy(ClassRef.forClass(apiClass));
-  }
-
-  /**
-   * Create a proxy stub for the specified class reference. The class reference must be to an interface type.
-   * @param classRef the class reference.
-   * @return a proxy stub for a remote class.
-   */
-  Object createProxy(final ClassRef classRef) {
-    final Class<?> classType = classRef.classType;
-    if (!classType.isInterface()) {
-      throw new IllegalArgumentException(classRef + " is not an interface"); //$NON-NLS-1$
-    }
-    return Proxy.newProxyInstance(new RemoteProxyClassLoader(ctx.classLoader, classType.getClassLoader(), getClass().getClassLoader()),
-                                  new Class[] {classType, ProxyClass.class},
-                                  new ProxyInvocationHandler(classRef, ctx));
+    return createProxy(ClassRef.forClass(apiClass));
   }
 
   /**
@@ -254,6 +290,17 @@ public final class Protocol implements AutoCloseable {
     return new ProxyObjectFactory();
   }
 
+  /**
+   * A proxy object factory for creating local proxy objects for remote class types.
+   * <p/>
+   * The class loader and invocation handler instances used by this factory can be
+   * customized via the methods {@link #withClassLoader(ClassLoader)} and 
+   * {@link #withInvocationHandler(InvocationHandler)}.
+   * <p/>
+   * If {@link #create(Class)} is called on an instance where either of these have not
+   * been set then a default instance of the missing class is created from the current 
+   * protocol context.
+   */
   final class ProxyObjectFactory {
     private ClassLoader classLoader;
     private InvocationHandler invocationHandler;
@@ -263,29 +310,26 @@ public final class Protocol implements AutoCloseable {
       return this;
     }
 
+    /**
+     * Set the invocation handler for this proxy object factory instance.
+     * @param newInvocationHandler the new invocation handler.
+     * @return {@code this} proxy object factory.
+     */
     ProxyObjectFactory withInvocationHandler(final InvocationHandler newInvocationHandler) {
       this.invocationHandler = newInvocationHandler;
       return this;
     }
 
+    /**
+     * Create a proxy object for the specified class type.
+     * @param classType the class type.
+     * @return the resulting proxy object.
+     */
     <API> API create(final Class<API> classType) {
       if (invocationHandler == null) invocationHandler = new ProxyInvocationHandler(ClassRef.forClass(classType), ctx);
       if (classLoader == null) classLoader = new RemoteProxyClassLoader(ctx.classLoader, classType.getClassLoader(), getClass().getClassLoader());
       return createProxy(classLoader, invocationHandler, classType, ProxyClass.class);
     }
-  }
-
-  @SuppressWarnings("unchecked")
-  static <API> API createProxy(final ClassLoader classLoader,
-                               final InvocationHandler invocationHandler,
-                               final Class<?>... interfaces) {
-    for (final Class<?> classType : interfaces) {
-      if (!classType.isInterface()) {
-        throw new IllegalArgumentException(classType + " is not an interface"); //$NON-NLS-1$
-      }
-    }
-
-    return (API) Proxy.newProxyInstance(classLoader, interfaces, invocationHandler);
   }
 
   /**
@@ -319,7 +363,7 @@ public final class Protocol implements AutoCloseable {
     
     logger.debug("{} Closed", identity); //$NON-NLS-1$
     isClosed = true;
-    if (topLevel) {
+    if (ctx.isTopLevel()) {
       try {
         if (isConnected()) {
           handleEnd(true);
@@ -330,7 +374,6 @@ public final class Protocol implements AutoCloseable {
     }
   }
 
-  /** {@inheritDoc} */
   @Override
   public String toString() {
     return identity + " ["
@@ -339,7 +382,6 @@ public final class Protocol implements AutoCloseable {
          + ", connection=" + ctx.con + "]";
   }
 
-  /** {@inheritDoc} */
   @Override
   protected void finalize() {
     if (topLevel) {
@@ -398,8 +440,8 @@ public final class Protocol implements AutoCloseable {
   }
 
   /**
-   * Signature interface for a proxied class reference.
-   * Public
+   * Signature interface for a proxy class reference. Instances of this interface are replaced
+   * by a {@link RemoteStub} when serialized.
    */
   public interface ProxyClass {
     /**
@@ -410,6 +452,10 @@ public final class Protocol implements AutoCloseable {
 
   /**
    * Invocation handler on a local proxy stub for a remote class reference.
+   * <p/>
+   * When a remote method is invoked a new child protocol instance is created from
+   * the current context, and the method invocation is performed on that protocol
+   * instance.
    */
   static class ProxyInvocationHandler extends RemoteInvocationHandler implements ProxyClass {
     private final ClassRef classRef;
@@ -445,8 +491,6 @@ public final class Protocol implements AutoCloseable {
 
   /**
    * Placeholder stub for a remote class.
-   * <p/>
-   * This interface is {@code public} to allow reflective class-loader access.
    */
   static final class RemoteStub implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -548,6 +592,12 @@ public final class Protocol implements AutoCloseable {
     }
   }
 
+  /**
+   * Read and execute commands from the remote protocol instance until a result is available
+   * or an error occurs.
+   * @return the result.
+   * @throws Exception if the command loop terminates with an error.
+   */
   private Object runCommandLoop() throws Exception {
     do {
       final Command command = read();
@@ -573,18 +623,17 @@ public final class Protocol implements AutoCloseable {
             break;
 
           case RESULT:
-            final Object result = handleResult();
-            if (isServer) {
-              throw new UnsupportedOperationException("RESULT: " + result); //$NON-NLS-1$
-            }
-            return result;
+            return handleResult();
 
           case END:
             handleEnd(false);
             return command;
         }
       } catch (final Exception e) {
-        handleError(e, isServer);
+        if (isServer)
+          handleError(e);
+        else
+          throw e;
       }
     } while (true);
   }
@@ -620,7 +669,7 @@ public final class Protocol implements AutoCloseable {
    * Write a {@link Command} and zero or more arguments to the output stream.
    * @param command the command.
    * @param args the arguments.
-   * @throws Exception if the command could not be written.
+   * @throws IOException if the command could not be written.
    */
   private final synchronized void write(final Protocol.Command command, final Object... args) throws IOException {
     if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", new Object[] {identity, command, Arrays.toString(args)}); //$NON-NLS-1$
@@ -649,27 +698,23 @@ public final class Protocol implements AutoCloseable {
   }
 
   /**
-   * Called when an error occurs locally.
+   * Called when an error occurs locally which should be sent to the remote protocol instance.
    * @param e the error.
    * @throws Exception the error if it should be re-thrown locally, or any other exception that occurred while handling the
    *                   exception.
    */
-  private void handleError(final Exception e, final boolean handleRemotely) throws Exception {
-    if (handleRemotely) {
-      try {
-        write(Command.ERROR, e);
-      } catch (final Exception e2) {
-        if (logger.isErrorEnabled()) {
-          final String msg = this + " Error sending ERROR response: " + e;
-          if (logger.isDebugEnabled())
-            logger.debug(msg, e2);
-          else
-            logger.error("{}: {}", msg, e2.toString());
-          throw e2;
-        }
+  private void handleError(final Exception e) throws Exception {
+    try {
+      write(Command.ERROR, e);
+    } catch (final Exception e2) {
+      if (logger.isErrorEnabled()) {
+        final String msg = this + " Error sending ERROR response: " + e;
+        if (logger.isDebugEnabled())
+          logger.debug(msg, e2);
+        else
+          logger.error("{}: {}", msg, e2.toString());
+        throw e2;
       }
-    } else {
-      throw e;
     }
   }
 
@@ -693,17 +738,21 @@ public final class Protocol implements AutoCloseable {
     try {
       sendResult(invokeLocal(incomingCall(methodRef)));
     } catch (final Exception e) {
-      handleError(e, true);
+      handleError(e);
     }
   }
 
   /**
-   * Read a result {@link Object} from the input stream and handle it.
+   * Read the RESULT command by reading a result from the input stream and handle it.
    * @return the result.
+   * @throws UnsupportedOperationException if a result was not expected in this context.
    * @throws Exception if an object could not be read.
    */
-  private Object handleResult() throws Exception {
+  private Object handleResult() throws UnsupportedOperationException, Exception {
     final Object result = readObject();
+    if (isServer) {
+      throw new UnsupportedOperationException("RESULT: " + result); //$NON-NLS-1$
+    }
     return result;
   }
 
@@ -731,14 +780,29 @@ public final class Protocol implements AutoCloseable {
     }
   }
 
-  private Object invokeLocal(final MethodRef methodRef) throws NoSuchMethodError, InvocationTargetException, Exception {
+  /**
+   * Invoke a method reference locally and return the outgoing result.
+   * @param methodRef the method reference to invoke.
+   * @return the outgoing result, with proxy classes replaced by remote stubs.
+   * @throws NotBoundException if the specified method or its class reference isn't in the current context.
+   * @throws InvocationTargetException if an exception is thrown by the invoked method.
+   * @throws Exception if an error occurs invoking the method.
+   */
+  private Object invokeLocal(final MethodRef methodRef) throws NotBoundException, InvocationTargetException, Exception {
     final Object api = ctx.getReference(methodRef.classRef.id());
     final Method method = ctx.getMethod(methodRef.id());
     final Object result = method.invoke(api, methodRef.args);
     return outgoing(result, method.getReturnType());
   }
 
-  private Object invokeRemote(final Command command, final Object obj) throws InvocationTargetException, Exception {
+  /**
+   * Invoke a remote command and return the received result.
+   * @param command the {@link Command} to invoke.
+   * @param obj the object argument for the command, or {@code null} if no argument should be sent.
+   * @return the received result.
+   * @throws Exception if an error occurs while invoking the remote command.
+   */
+  private Object invokeRemote(final Command command, final Object obj) throws Exception {
     if (obj != null) {
       write(command, obj);
     } else {
@@ -758,7 +822,12 @@ public final class Protocol implements AutoCloseable {
     return incoming(result);
   }
 
-  private void sendResult(final Object result) throws Exception {
+  /**
+   * Send a result to the remote protocol instance.
+   * @param result the result to send.
+   * @throws IOException if the result could not be sent.
+   */
+  private void sendResult(final Object result) throws IOException {
     if (result != null) {
       write(Command.RESULT, result);
     } else {
@@ -807,9 +876,15 @@ public final class Protocol implements AutoCloseable {
     return new MethodRef(classRef, method, args);
   }
 
-  private Object incoming(final Object arg) {
-    if (arg instanceof RemoteStub) {
-      final RemoteStub remoteStub = (RemoteStub) arg;
+  /**
+   * Process an incoming object. If the object is a remote stub it is replaced by either a proxy stub,
+   * or the local object if the remote stub object refers to a local object instance.
+   * @param obj the incoming object to process.
+   * @return the resulting local object.
+   */
+  private Object incoming(final Object obj) {
+    if (obj instanceof RemoteStub) {
+      final RemoteStub remoteStub = (RemoteStub) obj;
       final Object localInstance = ctx.findReference(remoteStub.remoteClass.id());
       if (localInstance != null) {
         return localInstance;
@@ -817,21 +892,28 @@ public final class Protocol implements AutoCloseable {
         return createProxy(remoteStub.remoteClass);
       }
     }
-    return arg;
+    return obj;
   }
 
-  private Object outgoing(final Object arg, final Class<?> classType) {
-    if (arg instanceof ProxyClass) {
-      final ClassRef remoteClassRef = ((ProxyClass) arg).getClassRef();
+  /**
+   * Process an outgoing object. If the object is a proxy class or its class type is a registered remote class
+   * it is replaced by a remote stub.
+   * @param obj the outgoing object to process.
+   * @param classType the formal class type of the outgoing object.
+   * @return the resulting outgoing object.
+   */
+  private Object outgoing(final Object obj, final Class<?> classType) {
+    if (obj instanceof ProxyClass) {
+      final ClassRef remoteClassRef = ((ProxyClass) obj).getClassRef();
       return new RemoteStub(remoteClassRef);
     }
-    if (arg != null && isRemote(arg.getClass())) {
-      final ClassRef remoteClassRef = ClassRef.forInstance(classType, arg);
-      ctx.registerReference(remoteClassRef, arg);
+    if (obj != null && isRemote(obj.getClass())) {
+      final ClassRef remoteClassRef = ClassRef.forInstance(classType, obj);
+      ctx.registerReference(remoteClassRef, obj);
       ctx.registerMethods(remoteClassRef);
       return new RemoteStub(remoteClassRef);
     }
-    return arg;
+    return obj;
   }
 
   /**
@@ -866,6 +948,50 @@ public final class Protocol implements AutoCloseable {
   private void setRemote(final Class<?> remoteClass) {
     remoteClasses.add(remoteClass);
     if (logger.isTraceEnabled()) logger.trace("Remotes: {} -> {}", remoteClass, remoteClasses);
+  }
+
+  /**
+   * Create a proxy stub for the specified class reference. The class reference must be to an interface type.
+   * <p/>
+   * A class loader is created for the proxy stub which delegates to the following class loaders
+   * (in prioritized order):
+   * <ul>
+   * <li>The current context class loader</li>
+   * <li>The class loader of the class reference</li>
+   * <li>The class loader of {@link Protocol}</li>
+   * </ul>
+   * @param classRef the class reference.
+   * @return a proxy stub for a remote class.
+   */
+  private <API> API createProxy(final ClassRef classRef) {
+    final Class<?> classType = classRef.classType;
+    final RemoteProxyClassLoader classLoader = new RemoteProxyClassLoader(ctx.classLoader,
+                                                                          classType.getClassLoader(),
+                                                                          getClass().getClassLoader());
+    return createProxy(classLoader,
+                       new ProxyInvocationHandler(classRef, ctx),
+                       new Class[] {classType, ProxyClass.class});
+  }
+
+  /**
+   * Create a proxy stub for the specified list of interfaces using the specified class loader and invocation
+   * handler.
+   * @param classLoader the class loader to use.
+   * @param invocationHandler the invocation handler.
+   * @param interfaces the list of interfaces for the proxy class to implement. 
+   * @return the resulting proxy class.
+   */
+  @SuppressWarnings("unchecked")
+  private static <API> API createProxy(final ClassLoader classLoader,
+                                       final InvocationHandler invocationHandler,
+                                       final Class<?>... interfaces) {
+    for (final Class<?> classType : interfaces) {
+      if (!classType.isInterface()) {
+        throw new IllegalArgumentException(classType + " is not an interface"); //$NON-NLS-1$
+      }
+    }
+  
+    return (API) Proxy.newProxyInstance(classLoader, interfaces, invocationHandler);
   }
 
 }

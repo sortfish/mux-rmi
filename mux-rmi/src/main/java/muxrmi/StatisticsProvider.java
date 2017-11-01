@@ -29,8 +29,8 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 
 /**
- * Base classes for collecting performance statistics
- * @author ReneAndersen
+ * Base classes for collecting performance statistics with the Metrics library.
+ * @author Rene Andersen
  */
 class StatisticsProvider {
   private final MetricRegistry registry;
@@ -64,19 +64,26 @@ class StatisticsProvider {
       histogram = registry.histogram(MetricRegistry.name(clazz, name));
     }
 
+    /**
+     * Descending classes must implement this method to provide the values
+     * that a fed into this histogram when {@link #update()} is called.
+     * @return the next value in the data set.
+     */
     protected abstract int get();
 
+    /**
+     * Update the histogram with the next value returned by {@link #get()}
+     */
     void update() {
       update(get());
     }
 
+    /**
+     * Update the histogram with the specified value.
+     * @param value the value
+     */
     void update(final int value) {
       histogram.update(value);
-    }
-
-    @Override
-    public String toString() {
-      return Integer.toString(get());
     }
   }
 
@@ -101,6 +108,11 @@ class StatisticsProvider {
     @Override
     protected int get() {
       return counter.get();
+    }
+
+    @Override
+    public String toString() {
+      return Integer.toString(get());
     }
   }
 }
