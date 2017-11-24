@@ -436,14 +436,16 @@ abstract class Protocol implements AutoCloseable {
     if (isClosed) return;
     
     logger.debug("{} Closed", identity); //$NON-NLS-1$
-    if (ctx.isTopLevel()) {
-      try {
+    try {
+      if (ctx.isTopLevel()) {
         if (isConnected()) {
           handleEnd(true);
         }
-      } catch (final Exception e) {
-        if (logger.isDebugEnabled()) logger.debug(identity + " Error in close", e); //$NON-NLS-1$
       }
+    } catch (final Exception e) {
+      if (logger.isDebugEnabled()) logger.debug(identity + " Error in close", e); //$NON-NLS-1$
+    } finally {
+      isClosed = true;
     }
   }
 
@@ -464,8 +466,8 @@ abstract class Protocol implements AutoCloseable {
   @Override
   protected void finalize() {
     if (!isClosed())
-      if (logger.isWarnEnabled()) logger.warn("{} Disconnecting in finalizer", this);
-      disconnect();
+      if (logger.isWarnEnabled()) logger.warn("{} closing in finalizer", this);
+      close();
   }
 
   /**
