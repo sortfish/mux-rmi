@@ -224,7 +224,7 @@ public class KeepAlive implements AutoCloseable {
     private Task(final Protocol protocol) {
       this.protocol = protocol;
 
-      if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive created: {}", settings);
+      if (logger.isDebugEnabled()) logger.debug(protocol.id() + " Connection keep-alive created: {}", settings);
     }
 
     private long getElapsedMillis(final long lastUpdateMillis) {
@@ -255,7 +255,7 @@ public class KeepAlive implements AutoCloseable {
       if (closed) {
         return;
       }
-      if (logger.isTraceEnabled()) logger.trace(protocol + " Connection keep-alive started");
+      if (logger.isTraceEnabled()) logger.trace(protocol.id() + " Connection keep-alive started");
 
       stats.threadCount.update();
 
@@ -270,7 +270,7 @@ public class KeepAlive implements AutoCloseable {
             final long elapsedMillis = getElapsedMillis(sharedState.lastUpdateMillis);
             final long intervalWithMarginMillis = SECONDS.toMillis(settings.intervalSec.get() + settings.recvMarginSec.get());
           if (elapsedMillis > intervalWithMarginMillis) {
-              if (logger.isWarnEnabled()) logger.warn(protocol + " Connection keep-alive margin exceeded: {}ms > {}ms",
+              if (logger.isWarnEnabled()) logger.warn(protocol.id() + " Connection keep-alive margin exceeded: {}ms > {}ms",
                   elapsedMillis, intervalWithMarginMillis);
               protocol.close();
               reschedule = false;
@@ -289,7 +289,7 @@ public class KeepAlive implements AutoCloseable {
 
           case CLOSED:
           default:
-            if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive stopped");
+            if (logger.isDebugEnabled()) logger.debug(protocol.id() + " Connection keep-alive stopped");
             return;
         }
       } catch (final Exception e) {
@@ -300,7 +300,7 @@ public class KeepAlive implements AutoCloseable {
       }
       if (reschedule && !scheduler.isShutdown()) {
         scheduler.schedule(this, rescheduleMillis, MILLISECONDS);
-        if (logger.isTraceEnabled()) logger.trace(protocol + " Connection keep-alive rescheduled in {}ms ({})", rescheduleMillis, state);
+        if (logger.isTraceEnabled()) logger.trace(protocol.id() + " Connection keep-alive rescheduled in {}ms ({})", rescheduleMillis, state);
       } else {
         close();
       }
@@ -311,8 +311,8 @@ public class KeepAlive implements AutoCloseable {
       if (!closed) {
         closed = true;
         stats.taskCount.dec();
+        if (logger.isDebugEnabled()) logger.debug(protocol.id() + " Connection keep-alive closed");
       }
-      if (logger.isDebugEnabled()) logger.debug(protocol + " Connection keep-alive closed");
     }
 
     @Override

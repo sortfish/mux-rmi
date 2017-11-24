@@ -71,7 +71,7 @@ import org.slf4j.LoggerFactory;
  * 
  * @author Rene Andersen
  */
-public final class Protocol implements AutoCloseable {
+abstract class Protocol implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(Protocol.class);
 
   /** The current state of a protocol instance. */
@@ -151,67 +151,137 @@ public final class Protocol implements AutoCloseable {
   private final Set<Class<?>> remoteClasses = new HashSet<>();
   private final Identity identity = new Identity();
   private final Context ctx;
-  private final boolean isServer;
-  private final boolean topLevel;
-  
   private volatile boolean isClosed = false;
 
   /**
-   * Create a new protocol instance with the specified context. The boolean parameters
-   * {@code isServer} is used to determine certain aspects of the protocol behavior.
+   * Create a new protocol instance with the specified context.
    * @param ctx the context.
-   * @param isServer {@code true} iff the protocol instance should be in server mode.
    */
-  private Protocol(final Context ctx, final boolean isServer) {
+  private Protocol(final Context ctx) {
     this.ctx = ctx;
-    this.isServer = isServer;
-    this.topLevel = ctx.isTopLevel();
 
     logger.debug("{}", this); //$NON-NLS-1$
   }
 
   /**
-   * Create a new child protocol instance based on the specified parent context.
-   * @param parentContext the parent context.
-   */
-  private Protocol(final Context parentContext) {
-    this(new Context(parentContext), false);
-    ctx.state.update(INITIAL);
-  }
-
-  /**
    * Create a top-level protocol instance that communicates on the specified socket connection.
-   * @param isServer {@code true} iff the protocol instance should be in server mode.
    * @param socket an accepted socket connection to the remote party.
    * @param classLoader The class loader to use when loading classes.
    */
-  private Protocol(final boolean isServer, final Socket socket, final ClassLoader classLoader) {
-    this(new Context(socket, classLoader), isServer);
+  private Protocol(final Socket socket, final ClassLoader classLoader) {
+    this(new Context(socket, classLoader));
   }
   
   /**
-   * Create a top-level client-side protocol instance on the specified socket connection.
-   * @param socket the socket.
-   * @param classLoader the class loader to use when loading classes.
-   * @return the new protocol instance.
+   * Specialization of {@link Protocol} for a client-side protocol instance.
    */
-  static Protocol client(final Socket socket, final ClassLoader classLoader) {
-    return new Protocol(false, socket, classLoader);
+  static final class Client extends Protocol {    
+    private final boolean topLevel;
+    private String name;
+
+    /**
+     * Create a top-level client-side protocol instance on the specified socket connection.
+     * @param socket the socket.
+     * @param classLoader the class loader to use when loading classes.
+     */
+    public Client(final Socket socket, final ClassLoader classLoader) {
+      super(socket, classLoader);
+      this.topLevel = true;
+    }
+
+    /**
+     * Create a new child client protocol instance based on the specified parent context.
+     * @param parentContext the parent context.
+     */
+    public Client(final Context parentContext) {
+      super(new Context(parentContext));
+      super.ctx.state.update(INITIAL);
+      this.topLevel = false;
+    }
+
+    @Override
+    protected void handleError(final Exception e) throws Exception {
+      throw e;
+    }
+
+    @Override
+    protected void handleEnd(final boolean isInitiator) throws Exception {
+      try {
+        if (isInitiator) {
+          write(Command.END);
+          Object result;
+          do {
+            result = run();
+          } while (result != Command.END);
+        }
+      } finally {
+        disconnect();
+      }
+    }
+    
+    @Override
+    protected String getName() {
+      if (name == null) {
+        synchronized(this) {
+          if (name == null)
+            name = "client, " + (topLevel ? "topLevel" : "nested");
+        }
+      }
+      return name;
+    }
+    
+    @Override
+    void disconnect() {
+      if (!topLevel) {
+        logger.warn("{} Disconnecting from nested protocol instance", this);
+      }
+      super.disconnect();
+    }
   }
 
   /**
-   * Create a top-level server-side protocol instance on the specified socket connection.
-   * @param socket the socket.
-   * @param registry a {@link Registry} describing the methods which are available for remote invocation.
-   * @param classLoader the class loader to use when loading classes.
-   * @return the new protocol instance.
+   * Specialization of {@link Protocol} for a server-side protocol instance.
    */
-  static Protocol server(final Socket socket, final Registry registry, final ClassLoader classLoader) {
-    final Protocol protocol = new Protocol(true, socket, classLoader);
-    protocol.ctx.init(registry);
-    return protocol;
-  }
+  static final class Server extends Protocol {
+    /**
+     * Create a top-level server-side protocol instance on the specified socket connection.
+     * @param socket the socket.
+     * @param registry a {@link Registry} describing the methods which are available for remote invocation.
+     * @param classLoader the class loader to use when loading classes.
+     */
+    public Server(final Socket socket, final Registry registry, final ClassLoader classLoader) {
+      super(socket, classLoader);
+      super.ctx.init(registry);
+    }
+    
+    @Override
+    protected Object handleResult() throws UnsupportedOperationException, Exception {
+      // We do not accept RESULT requests to a server. But for error reporting purposes and to
+      // clean up the input stream we read the result object before throwing an error.
+      final Object result = super.handleResult();
+      throw new UnsupportedOperationException("RESULT: " + result); //$NON-NLS-1$
+    }
 
+    @Override
+    protected void handleError(final Exception e) throws Exception {
+      super.handleError(e, true);
+    }
+    
+    @Override
+    protected void handleEnd(final boolean isInitiator) throws Exception {
+      try {
+        write(Command.END);
+      } finally {
+        disconnect();
+      }
+    }    
+    
+    @Override
+    protected String getName() {
+      return "server";
+    }
+  }
+  
   /**
    * Run the protocol command loop until a result is available.
    * <p/>
@@ -231,10 +301,10 @@ public final class Protocol implements AutoCloseable {
       // Exception thrown by a local method invocation.
       throw e;
     } catch (final IOException e) {
-      logger.debug("{} I/O error: {}", this, e.toString()); //$NON-NLS-1$
+      logger.debug("{} I/O error: {}", identity, e.toString()); //$NON-NLS-1$
       throw e;
     } catch (final NotBoundException e) {
-      logger.debug("{} Not bound: {}", this, e.getMessage()); //$NON-NLS-1$
+      logger.debug("{} Not bound: {}", identity, e.getMessage()); //$NON-NLS-1$
       throw e;
     } catch (final Throwable cause) {
       logger.error(this + " Unhandled exception", cause); //$NON-NLS-1$
@@ -343,8 +413,12 @@ public final class Protocol implements AutoCloseable {
    * Forcible disconnect this protocol instance.
    */
   void disconnect() {
-    ctx.con.close();
-    ctx.state.update(CLOSED);
+    if (!isClosed) {
+      ctx.con.close();
+      ctx.state.update(CLOSED);
+      isClosed = true;
+      logger.debug("{} Disconnected", identity);
+    }
   }
 
   /**
@@ -362,31 +436,36 @@ public final class Protocol implements AutoCloseable {
     if (isClosed) return;
     
     logger.debug("{} Closed", identity); //$NON-NLS-1$
-    isClosed = true;
     if (ctx.isTopLevel()) {
       try {
         if (isConnected()) {
           handleEnd(true);
         }
       } catch (final Exception e) {
-        if (logger.isDebugEnabled()) logger.debug(this + " Error in close", e); //$NON-NLS-1$
+        if (logger.isDebugEnabled()) logger.debug(identity + " Error in close", e); //$NON-NLS-1$
       }
     }
   }
 
+  /**
+   * @return a short string that unique identifies this protocol instance.
+   */
+  public String id() {
+    return identity.toString();
+  }
+  
   @Override
   public String toString() {
-    return identity + " ["
-         + (isServer ? "server" : "client")
-         + ", " + (topLevel ? "topLevel" : "nested")
+    return id() + " ["
+         + getName()
          + ", connection=" + ctx.con + "]";
   }
 
   @Override
   protected void finalize() {
-    if (topLevel) {
+    if (!isClosed())
+      if (logger.isWarnEnabled()) logger.warn("{} Disconnecting in finalizer", this);
       disconnect();
-    }
   }
 
   /**
@@ -477,7 +556,7 @@ public final class Protocol implements AutoCloseable {
     protected Object invokeRemote(final Method method,
                                   final Object[] args) throws InvocationTargetException, Exception {
       final Object result;
-      try (final Protocol protocol = new Protocol(context)) {
+      try (final Protocol protocol = new Client(context)) {
         result = protocol.invokeRemote(classRef, method, args);
       }
       return result;
@@ -593,57 +672,11 @@ public final class Protocol implements AutoCloseable {
   }
 
   /**
-   * Read and execute commands from the remote protocol instance until a result is available
-   * or an error occurs.
-   * @return the result.
-   * @throws Exception if the command loop terminates with an error.
-   */
-  private Object runCommandLoop() throws Exception {
-    do {
-      final Command command = read();
-      try {
-        switch (command) {
-          case CONTINUE:
-            break;
-
-          case OK:
-            return command;
-
-          case ERROR:
-            final Exception e = handleError();
-            if (e != null) throw e;
-            break;
-
-          case BIND:
-            handleBind();
-            break;
-
-          case CALL:
-            handleCall();
-            break;
-
-          case RESULT:
-            return handleResult();
-
-          case END:
-            handleEnd(false);
-            return command;
-        }
-      } catch (final Exception e) {
-        if (isServer)
-          handleError(e);
-        else
-          throw e;
-      }
-    } while (true);
-  }
-
-  /**
    * Read the next {@link Command} from the input stream.
    * @return the command.
    * @throws Exception if a command could not be read.
    */
-  private final Protocol.Command read() throws Exception {
+  protected final Protocol.Command read() throws Exception {
     ctx.state.update(ACCEPT);
     final int cmd = ctx.con.in().read();
     ctx.state.update(RUNNING);
@@ -658,7 +691,7 @@ public final class Protocol implements AutoCloseable {
    * @return the object.
    * @throws Exception (IOException | ClassCastException) if an object could not be read
    */
-  private final Object readObject() throws Exception {
+  protected final Object readObject() throws Exception {
     final Object res = ctx.con.in().readObject();
 
     if (logger.isTraceEnabled()) logger.trace("{} <- {}", identity, res); //$NON-NLS-1$
@@ -671,7 +704,7 @@ public final class Protocol implements AutoCloseable {
    * @param args the arguments.
    * @throws IOException if the command could not be written.
    */
-  private final synchronized void write(final Protocol.Command command, final Object... args) throws IOException {
+  protected final synchronized void write(final Protocol.Command command, final Object... args) throws IOException {
     if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", new Object[] {identity, command, Arrays.toString(args)}); //$NON-NLS-1$
 
     final ObjectOutputStream out = ctx.con.out();
@@ -684,12 +717,65 @@ public final class Protocol implements AutoCloseable {
     ctx.state.update(RUNNING);
   }
 
+  private void handleError(final Exception e, final boolean handleRemotely) throws Exception {
+    if (handleRemotely) {
+      try {
+        write(Command.ERROR, e);
+      } catch (final Exception e2) {
+        if (logger.isErrorEnabled()) {
+          final String msg = this + " Error sending ERROR response: " + e;
+          if (logger.isDebugEnabled())
+            logger.debug(msg, e2);
+          else
+            logger.error("{}: {}", msg, e2.toString());
+          throw e2;
+        }
+      }
+    } else {
+      throw e;
+    }
+  }
+  
+  /**
+   * Read a {@link ClassRef} and verify that it corresponds to a registered class reference.
+   * @throws NotBoundException if the received class reference was not registered.
+   * @throws Exception if an error occurs while reading this request.
+   */
+  protected void handleBind() throws NotBoundException, Exception {
+    final ClassRef classRef = (ClassRef) readObject();
+    ctx.getReference(classRef.id());
+    write(Command.OK);
+  }
+
+  /**
+   * Read and invoke a method call from the input stream.
+   * @throws Exception if a method call could not be read.
+   */
+  protected void handleCall() throws Exception {
+    final MethodRef methodRef = (MethodRef) readObject();
+    try {
+      sendResult(invokeLocal(incomingCall(methodRef)));
+    } catch (final Exception e) {
+      handleError(e, true);
+    }
+  }
+
+  /**
+   * Read the RESULT command by reading a result from the input stream and handle it.
+   * @return the result.
+   * @throws UnsupportedOperationException if a result was not expected in this context.
+   * @throws Exception if an object could not be read.
+   */
+  protected Object handleResult() throws UnsupportedOperationException, Exception {
+    return readObject();
+  }
+
   /**
    * Read an {@link Exception} from the input stream.
    * @return the exception.
    * @throws Exception if an exception could not be read.
    */
-  private Exception handleError() throws Exception {
+  protected Exception handleError() throws Exception {
     final Throwable t = (Throwable) readObject();
     if (t instanceof Exception) {
       return (Exception) t;
@@ -703,81 +789,61 @@ public final class Protocol implements AutoCloseable {
    * @throws Exception the error if it should be re-thrown locally, or any other exception that occurred while handling the
    *                   exception.
    */
-  private void handleError(final Exception e) throws Exception {
-    try {
-      write(Command.ERROR, e);
-    } catch (final Exception e2) {
-      if (logger.isErrorEnabled()) {
-        final String msg = this + " Error sending ERROR response: " + e;
-        if (logger.isDebugEnabled())
-          logger.debug(msg, e2);
-        else
-          logger.error("{}: {}", msg, e2.toString());
-        throw e2;
-      }
-    }
-  }
-
-  /**
-   * Read a {@link ClassRef} and verify that it corresponds to a registered class reference.
-   * @throws NotBoundException if the received class reference was not registered.
-   * @throws Exception if an error occurs while reading this request.
-   */
-  private void handleBind() throws NotBoundException, Exception {
-    final ClassRef classRef = (ClassRef) readObject();
-    ctx.getReference(classRef.id());
-    write(Command.OK);
-  }
-
-  /**
-   * Read and invoke a method call from the input stream.
-   * @throws Exception if a method call could not be read.
-   */
-  private void handleCall() throws Exception {
-    final MethodRef methodRef = (MethodRef) readObject();
-    try {
-      sendResult(invokeLocal(incomingCall(methodRef)));
-    } catch (final Exception e) {
-      handleError(e);
-    }
-  }
-
-  /**
-   * Read the RESULT command by reading a result from the input stream and handle it.
-   * @return the result.
-   * @throws UnsupportedOperationException if a result was not expected in this context.
-   * @throws Exception if an object could not be read.
-   */
-  private Object handleResult() throws UnsupportedOperationException, Exception {
-    final Object result = readObject();
-    if (isServer) {
-      throw new UnsupportedOperationException("RESULT: " + result); //$NON-NLS-1$
-    }
-    return result;
-  }
+  protected abstract void handleError(final Exception e) throws Exception;
 
   /**
    * Handle the END command and disconnect this protocol instance.
    * @param isInitiator {@code true} if the END command was initiated locally, {@code false} if it was initiated remotely.
    * @throws Exception if thrown while disconnecting.
    */
-  private void handleEnd(final boolean isInitiator) throws Exception {
-    try {
-      if (isServer) {
-        write(Command.END);
-      }
-      else {
-        if (isInitiator) {
-          write(Command.END);
-          Object result;
-          do {
-            result = run();
-          } while (result != Command.END);
+  protected abstract void handleEnd(final boolean isInitiator) throws Exception;
+
+  /**
+   * @return a short textual description of this protocol instance, for use in {@link #toString()}.
+   */
+  protected abstract String getName();
+  
+  /**
+   * Read and execute commands from the remote protocol instance until a result is available
+   * or an error occurs.
+   * @return the result.
+   * @throws Exception if the command loop terminates with an error.
+   */
+  private Object runCommandLoop() throws Exception {
+    do {
+      final Command command = read();
+      try {
+        switch (command) {
+          case CONTINUE:
+            break;
+  
+          case OK:
+            return command;
+  
+          case ERROR:
+            final Exception e = handleError();
+            if (e != null) throw e;
+            break;
+  
+          case BIND:
+            handleBind();
+            break;
+  
+          case CALL:
+            handleCall();
+            break;
+  
+          case RESULT:
+            return handleResult();
+  
+          case END:
+            handleEnd(false);
+            return command;
         }
+      } catch (final Exception e) {
+        handleError(e);
       }
-    } finally {
-      disconnect();
-    }
+    } while (true);
   }
 
   /**

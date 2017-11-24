@@ -361,7 +361,7 @@ public class RemoteClient implements AutoCloseable {
       settings.socketSettings.applyTo(socket);
       socket.connect(settings.endpoint);
 
-      final Connection connection = new Connection(Protocol.client(socket, classLoader));
+      final Connection connection = new Connection(new Protocol.Client(socket, classLoader));
       connections.add(connection);
       return connection;
     }

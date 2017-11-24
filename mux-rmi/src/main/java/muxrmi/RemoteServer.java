@@ -319,7 +319,7 @@ public class RemoteServer implements AutoCloseable {
             final Socket socket = serverSocket.accept();
             settings.socketSettings.applyTo(socket);
 
-            final Connection connection = new Connection(Protocol.server(socket, registry, classLoader), this);
+            final Connection connection = new Connection(new Protocol.Server(socket, registry, classLoader), this);
             executor.execute(connection);
           } catch (final Exception e) {
             if (serverSocket.isClosed()) {
