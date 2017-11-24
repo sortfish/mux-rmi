@@ -466,7 +466,7 @@ abstract class Protocol implements AutoCloseable {
   @Override
   protected void finalize() {
     if (!isClosed())
-      if (logger.isWarnEnabled()) logger.warn("{} closing in finalizer", this);
+      if (logger.isWarnEnabled()) logger.warn("{} Closing in finalizer", this);
       close();
   }
 
