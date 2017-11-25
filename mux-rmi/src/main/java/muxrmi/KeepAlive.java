@@ -128,7 +128,7 @@ public class KeepAlive implements AutoCloseable {
       super(statistics);
     }
     
-    final Value threadCount = new Value(KeepAlive.class, "thread-count") {
+    final Value threadCount = new Value(Statistics.class, "thread-count") {
       @Override
       protected int get() {
         if (scheduler instanceof ThreadPoolExecutor) {
@@ -138,7 +138,7 @@ public class KeepAlive implements AutoCloseable {
       }
     };
 
-    final Counter taskCount = new Counter(KeepAlive.class, "task-count");
+    final Counter taskCount = new Counter(Statistics.class, "task-count");
   }
 
   /**
@@ -155,7 +155,7 @@ public class KeepAlive implements AutoCloseable {
    */
   synchronized void start(final Protocol protocol) throws RejectedExecutionException {
     final Task task = new Task(protocol);
-    scheduler.schedule(task, 0, SECONDS);
+    scheduler.schedule(task, settings.pollIntervalSec.get(), SECONDS);
     tasks.put(protocol, task);
     stats.taskCount.inc();
   }

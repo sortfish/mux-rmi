@@ -26,6 +26,9 @@ package muxrmi;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * A generic thread factory builder that makes it possible to create a thread factory with
  * control of pretty much every aspect of thread creation.
@@ -108,6 +111,7 @@ final class ThreadFactoryBuilder {
   }
 
   private static final class ThreadFactoryImpl implements ThreadFactory {
+    private static final Logger logger = LoggerFactory.getLogger(ThreadFactoryImpl.class);
     private static final String SEPARATOR = "-";
 
     private final AtomicInteger threadNumber;
@@ -132,6 +136,8 @@ final class ThreadFactoryBuilder {
       final Thread t = new Thread(threadGroup, r, name(factoryName, name(threadNamePrefix, threadNumber)), 0);
       t.setDaemon(isDaemon);
       t.setPriority(threadPriority);
+      
+      if (logger.isDebugEnabled()) logger.debug("Thread created: {}", t.getName());
       return t;
     }
 

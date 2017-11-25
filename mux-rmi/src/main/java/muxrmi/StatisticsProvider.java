@@ -25,6 +25,9 @@ package muxrmi;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 
@@ -55,13 +58,28 @@ class StatisticsProvider {
   }
   
   /**
+   * Return the full name of the class with inner-class separators ('$') replaced by dots ('.')
+   * @param clazz the class
+   * @return the resulting name of the class
+   */
+  String dotify(final Class<?> clazz) {
+    return clazz.getName().replace("$", ".");
+  }
+  
+  /**
    * A value-class which collects statistics of the collected values.
    */
   abstract class Value {
+    final Logger logAll = LoggerFactory.getLogger(Value.class);
+    
+    final String registryName;
     final Histogram histogram;
-
+    final Logger logVal;    
+    
     Value(final Class<?> clazz, final String name) {
-      histogram = registry.histogram(MetricRegistry.name(clazz, name));
+      this.registryName = MetricRegistry.name(dotify(clazz), name);
+      this.histogram = registry.histogram(registryName);
+      this.logVal = LoggerFactory.getLogger(registryName);
     }
 
     /**
@@ -83,7 +101,18 @@ class StatisticsProvider {
      * @param value the value
      */
     void update(final int value) {
+      log(value);
       histogram.update(value);
+    }
+    
+    private void log(final int value) {
+      log(value, logAll, logVal);
+    }
+
+    private void log(final int value, final Logger... loggers) {
+      for (final Logger logger : loggers) {
+        if (logger.isTraceEnabled()) logger.trace("{}({})", registryName, value);
+      }
     }
   }
 

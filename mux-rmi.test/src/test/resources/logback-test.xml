@@ -17,12 +17,17 @@
   </root>
 
   <!-- 
-  <logger name="easyrmi" additivity="false">
+  <logger name="muxrmi" additivity="false">
     <level value="DEBUG" />
     <appender-ref ref="STDOUT" />
   </logger>
+  
+  <logger name="muxrmi.KeepAlive.Statistics" additivity="false">
+    <level value="TRACE" />
+    <appender-ref ref="STDOUT" />
+  </logger>
 
-  <logger name="easyrmi" additivity="false">
+  <logger name="muxrmi.RemoteServer.Statistics" additivity="false">
     <level value="TRACE" />
     <appender-ref ref="STDOUT" />
   </logger>

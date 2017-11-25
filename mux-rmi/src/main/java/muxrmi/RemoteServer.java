@@ -196,7 +196,7 @@ public class RemoteServer implements AutoCloseable {
       super(statistics);
     }
     
-    Value threadCount = new Value(RemoteServer.class, "thread-count") {
+    Value threadCount = new Value(Statistics.class, "thread-count") {
       @Override
       protected int get() {
         if (executor instanceof ThreadPoolExecutor) {
@@ -206,7 +206,7 @@ public class RemoteServer implements AutoCloseable {
       }
     };
 
-    Counter connectionCount = new Counter(RemoteServer.class, "connection-count");
+    Counter connectionCount = new Counter(Statistics.class, "connection-count");
   }
 
   /**

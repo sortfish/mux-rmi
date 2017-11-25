@@ -75,6 +75,9 @@ public class KeepAliveTest extends RemoteTestBase {
 
   // The interval (in ms) to sample the maximum time that has passed without a command being exchanged on the remote connection.
   private static final long SAMPLE_INTERVAL_MILLIS = 250;
+  
+  // The maximum acceptable interval without a command being exchanged
+  private static final long MAX_INTERVAL = SECONDS.toMillis(KEEP_ALIVE_INTERVAL_SEC) + SAMPLE_INTERVAL_MILLIS;
 
   @Test
   public void testKeepAliveDefault() throws Exception {
@@ -105,7 +108,7 @@ public class KeepAliveTest extends RemoteTestBase {
           Thread.sleep(KEEP_ALIVE_SLEEP_MILLIS);
         }
         final long maxCommandInterval = task.getMaxCommandInterval();
-        Assert.assertTrue(Long.toString(maxCommandInterval), maxCommandInterval <= SECONDS.toMillis(KEEP_ALIVE_INTERVAL_SEC) + SAMPLE_INTERVAL_MILLIS);
+        Assert.assertTrue(Long.toString(maxCommandInterval), maxCommandInterval <= MAX_INTERVAL);
 
         final String s = "foo";
         // Check that the remote API is still functional
@@ -126,7 +129,7 @@ public class KeepAliveTest extends RemoteTestBase {
           api.sleepFor(KEEP_ALIVE_SLEEP_MILLIS);
         }
         final long maxCommandInterval = task.getMaxCommandInterval();
-        final long limit = SECONDS.toMillis(KEEP_ALIVE_INTERVAL_SEC) + SAMPLE_INTERVAL_MILLIS;
+        final long limit = MAX_INTERVAL;
         Assert.assertTrue(maxCommandInterval + ">" + limit, maxCommandInterval <= limit);
 
         final String s = "foo";
@@ -184,13 +187,13 @@ public class KeepAliveTest extends RemoteTestBase {
       globalMaxCommandInterval = Math.max(globalMaxCommandInterval, maxCommandInterval);
       averageMaxCommandInterval += (double)maxCommandInterval / maxCommandIntervals.size();
 
-      if (maxCommandInterval > SECONDS.toMillis(KEEP_ALIVE_INTERVAL_SEC) + SAMPLE_INTERVAL_MILLIS) {
+      if (maxCommandInterval > MAX_INTERVAL) {
         failures.add(maxCommandInterval);
       }
     }
     logger.debug("Global MaxCommandInterval={}", globalMaxCommandInterval);
     logger.debug("Average MaxCommandInterval={}", averageMaxCommandInterval);
-    Assert.assertTrue("Ping-interval(s) exceeded: " + failures.toString(), failures.isEmpty());
+    Assert.assertTrue("Ping-interval(" + MAX_INTERVAL + "ms) exceeded: " + failures.toString(), failures.isEmpty());
   }
 
   public interface API extends Remote {
