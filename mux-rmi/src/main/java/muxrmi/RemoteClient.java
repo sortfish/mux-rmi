@@ -449,7 +449,7 @@ public class RemoteClient implements AutoCloseable {
      */
     <API> API connect(final Class<API> apiClass) throws NotBoundException, Exception {
       protocol.bind(apiClass);
-      final API api = protocol.newProxyObjectFactory().withInvocationHandler(new ClientInvocationHandler(apiClass)).create(apiClass);
+      final API api = protocol.createProxy(apiClass, new ClientInvocationHandler(apiClass));
       proxyObjects.add(api);
       return api;
     }

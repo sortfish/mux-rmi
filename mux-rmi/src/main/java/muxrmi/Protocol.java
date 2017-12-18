@@ -349,57 +349,8 @@ abstract class Protocol implements AutoCloseable {
    * @return a proxy stub for the remote API.
    * @throws InvalidClassException if the specified class does not implement the {@link Remote} interface.
    */
-  <API> API createProxy(final Class<API> apiClass) throws InvalidClassException {
-    return createProxy(ClassRef.forClass(apiClass));
-  }
-
-  /**
-   * @return A new instance of {@link ProxyObjectFactory} for creating local proxy objects for remote interfaces.
-   */
-  ProxyObjectFactory newProxyObjectFactory() {
-    return new ProxyObjectFactory();
-  }
-
-  /**
-   * A proxy object factory for creating local proxy objects for remote class types.
-   * <p/>
-   * The class loader and invocation handler instances used by this factory can be
-   * customized via the methods {@link #withClassLoader(ClassLoader)} and 
-   * {@link #withInvocationHandler(InvocationHandler)}.
-   * <p/>
-   * If {@link #create(Class)} is called on an instance where either of these have not
-   * been set then a default instance of the missing class is created from the current 
-   * protocol context.
-   */
-  final class ProxyObjectFactory {
-    private ClassLoader classLoader;
-    private InvocationHandler invocationHandler;
-
-    ProxyObjectFactory withClassLoader(final ClassLoader newClassLoader) {
-      this.classLoader = newClassLoader;
-      return this;
-    }
-
-    /**
-     * Set the invocation handler for this proxy object factory instance.
-     * @param newInvocationHandler the new invocation handler.
-     * @return {@code this} proxy object factory.
-     */
-    ProxyObjectFactory withInvocationHandler(final InvocationHandler newInvocationHandler) {
-      this.invocationHandler = newInvocationHandler;
-      return this;
-    }
-
-    /**
-     * Create a proxy object for the specified class type.
-     * @param classType the class type.
-     * @return the resulting proxy object.
-     */
-    <API> API create(final Class<API> classType) {
-      if (invocationHandler == null) invocationHandler = new ProxyInvocationHandler(ClassRef.forClass(classType), ctx);
-      if (classLoader == null) classLoader = new RemoteProxyClassLoader(ctx.classLoader, classType.getClassLoader(), getClass().getClassLoader());
-      return createProxy(classLoader, invocationHandler, classType, ProxyClass.class);
-    }
+  <API> API createProxy(final Class<API> apiClass, final InvocationHandler invocationHandler) throws InvalidClassException {
+    return createProxy(invocationHandler, apiClass);
   }
 
   /**
@@ -719,25 +670,6 @@ abstract class Protocol implements AutoCloseable {
     ctx.state.update(RUNNING);
   }
 
-  private void handleError(final Exception e, final boolean handleRemotely) throws Exception {
-    if (handleRemotely) {
-      try {
-        write(Command.ERROR, e);
-      } catch (final Exception e2) {
-        if (logger.isErrorEnabled()) {
-          final String msg = this + " Error sending ERROR response: " + e;
-          if (logger.isDebugEnabled())
-            logger.debug(msg, e2);
-          else
-            logger.error("{}: {}", msg, e2.toString());
-          throw e2;
-        }
-      }
-    } else {
-      throw e;
-    }
-  }
-  
   /**
    * Read a {@link ClassRef} and verify that it corresponds to a registered class reference.
    * @throws NotBoundException if the received class reference was not registered.
@@ -903,6 +835,25 @@ abstract class Protocol implements AutoCloseable {
     }
   }
 
+  private void handleError(final Exception e, final boolean handleRemotely) throws Exception {
+    if (handleRemotely) {
+      try {
+        write(Command.ERROR, e);
+      } catch (final Exception e2) {
+        if (logger.isErrorEnabled()) {
+          final String msg = this + " Error sending ERROR response: " + e;
+          if (logger.isDebugEnabled())
+            logger.debug(msg, e2);
+          else
+            logger.error("{}: {}", msg, e2.toString());
+          throw e2;
+        }
+      }
+    } else {
+      throw e;
+    }
+  }
+
   /**
    * Create an incoming method call representation. Any argument that matches the remote stub placeholder will be replace by
    * a proxy stub for the remote object.
@@ -1032,35 +983,30 @@ abstract class Protocol implements AutoCloseable {
    * @return a proxy stub for a remote class.
    */
   private <API> API createProxy(final ClassRef classRef) {
-    final Class<?> classType = classRef.classType;
-    final RemoteProxyClassLoader classLoader = new RemoteProxyClassLoader(ctx.classLoader,
-                                                                          classType.getClassLoader(),
-                                                                          getClass().getClassLoader());
-    return createProxy(classLoader,
-                       new ProxyInvocationHandler(classRef, ctx),
-                       new Class[] {classType, ProxyClass.class});
+    final InvocationHandler invocationHandler = new ProxyInvocationHandler(classRef, ctx); 
+    return createProxy(invocationHandler, classRef.classType);
   }
 
   /**
-   * Create a proxy stub for the specified list of interfaces using the specified class loader and invocation
-   * handler.
-   * @param classLoader the class loader to use.
+   * Create a proxy stub for the specified interface type using the specified invocation handler for handling
+   * method invocations on the proxy stub. In addition to the interface type the proxy class will also
+   * implement the {@link ProxyClass} signature interface.
    * @param invocationHandler the invocation handler.
-   * @param interfaces the list of interfaces for the proxy class to implement. 
+   * @param classType the class type to create a proxy stub for.
    * @return the resulting proxy class.
    */
   @SuppressWarnings("unchecked")
-  private static <API> API createProxy(final ClassLoader classLoader,
-                                       final InvocationHandler invocationHandler,
-                                       final Class<?>... interfaces) {
-    for (final Class<?> classType : interfaces) {
-      if (!classType.isInterface()) {
-        throw new IllegalArgumentException(classType + " is not an interface"); //$NON-NLS-1$
-      }
+  private <API> API createProxy(final InvocationHandler invocationHandler,
+                                final Class<?> classType) {
+    if (!classType.isInterface()) {
+      throw new IllegalArgumentException(classType + " is not an interface"); //$NON-NLS-1$
     }
-  
-    return (API) Proxy.newProxyInstance(classLoader, interfaces, invocationHandler);
+    
+    final RemoteProxyClassLoader proxyClassLoader = new RemoteProxyClassLoader(ctx.classLoader,
+                                                                               classType.getClassLoader(),
+                                                                               getClass().getClassLoader());
+    final Class<?>[] interfaces = new Class<?>[] { classType, ProxyClass.class };
+    return (API) Proxy.newProxyInstance(proxyClassLoader, interfaces, invocationHandler);
   }
-
 }
 
