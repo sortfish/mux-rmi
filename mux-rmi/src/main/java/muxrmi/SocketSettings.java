@@ -37,7 +37,7 @@ import easysettings.ConfigurationSettings;
  * This class collects and applies socket settings to socket instances.
  * @author Rene Andersen
  */
-class SocketSettings extends ConfigurationSettings {
+public class SocketSettings extends ConfigurationSettings {
   private static final Logger logger = LoggerFactory.getLogger(SocketSettings.class);
 
   private static final String PREFIX = "muxrmi.";
@@ -51,12 +51,19 @@ class SocketSettings extends ConfigurationSettings {
   /** Whether TCP no-delay (TCP_NODELAY) is enabled. */
   public final BooleanValue tcpNoDelay = new BooleanValue("tcp-no-delay", true);
 
-  SocketSettings() {
+  /**
+   * Read socket settings from the system properties using the prefix '{@code muxrmi.}' 
+   */
+  public SocketSettings() {
     super(PREFIX);
     logger.info("SocketSettings: {}", this);
   }
 
-  SocketSettings(ConfigurationSettings.Reader reader) {
+  /**
+   * Read socket settings from the specified reader.
+   * @param reader the reader
+   */
+  public SocketSettings(ConfigurationSettings.Reader reader) {
     super(reader);
   }
   

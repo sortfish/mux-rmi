@@ -35,21 +35,32 @@ import com.codahale.metrics.MetricRegistry;
  * Base classes for collecting performance statistics with the Metrics library.
  * @author Rene Andersen
  */
-class StatisticsProvider {
+public class StatisticsProvider {
   private final MetricRegistry registry;
 
-  StatisticsProvider() {
+  /**
+   * Collect statistics into a new Metrics registry. 
+   */
+  public StatisticsProvider() {
     this(new MetricRegistry());
   }
   
-  StatisticsProvider(final StatisticsProvider statistics) {
-    this(statistics.registry);
-  }
-  
-  StatisticsProvider(final MetricRegistry registry) {
+  /**
+   * Collect statistics into the specified Metrics registry.
+   * @param registry the registry.
+   */
+  public StatisticsProvider(final MetricRegistry registry) {
     this.registry = registry;
   }
   
+  /**
+   * Collect statistics into the same Metrics registry as used by another statistics provider. 
+   * @param statistics the other statistics provider.
+   */
+  StatisticsProvider(final StatisticsProvider statistics) {
+    this(statistics.registry);
+  }
+
   /**
    * @return the Metric registry.
    */
@@ -62,7 +73,7 @@ class StatisticsProvider {
    * @param clazz the class
    * @return the resulting name of the class
    */
-  String dotify(final Class<?> clazz) {
+  static String dotify(final Class<?> clazz) {
     return clazz.getName().replace("$", ".");
   }
   

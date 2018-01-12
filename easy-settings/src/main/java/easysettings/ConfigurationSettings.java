@@ -164,7 +164,7 @@ public abstract class ConfigurationSettings {
      * @param prefix the prefix to prepend to the setting names to form property keys.
      * @param properties the properties object.
      */
-    protected FromProperties(final String prefix, final Properties properties) {
+    public FromProperties(final String prefix, final Properties properties) {
       this.prefix = prefix;
       this.properties = properties;
     }
@@ -172,7 +172,7 @@ public abstract class ConfigurationSettings {
     /**
      * @return the prefix being prepended to the setting names to form property keys.
      */
-    protected String getPrefix() {
+    public String getPrefix() {
       return prefix;
     }
 
