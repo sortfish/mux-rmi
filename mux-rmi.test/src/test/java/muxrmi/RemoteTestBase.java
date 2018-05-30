@@ -25,6 +25,7 @@ package muxrmi;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.net.SocketAddress;
 import java.rmi.NotBoundException;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,11 +46,9 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.JmxReporter;
 
-import muxrmi.KeepAlive;
-import muxrmi.RemoteClient;
-import muxrmi.RemoteServer;
-import muxrmi.StatisticsProvider;
-import muxrmi.ThreadFactoryBuilder;
+import easysettings.ConfigurationSettings;
+import muxrmi.io.CommunicationChannel;
+import muxrmi.io.ObjectStreamChannel;
 
 /**
  * Common base class for remote tests.
@@ -58,17 +57,21 @@ import muxrmi.ThreadFactoryBuilder;
 public class RemoteTestBase {
   private static final Logger logger = LoggerFactory.getLogger(RemoteTestBase.class);
   
+  protected static final String PREFIX = "muxrmi.";
   protected static final int LISTEN_PORT = 0;
 
   protected static StatisticsProvider statistics;
   protected static JmxReporter jmxReporter;
-  protected static KeepAlive.Settings keepAliveSettings;
-  private static SocketSettings socketSettings;
   protected static RemoteServer server;
+  protected static KeepAlive.Settings keepAliveSettings;
+  protected static ServerSocket serverSocket;
   protected static RemoteServer.Service service;
-
   protected static ClassLoader classLoader = RemoteTestBase.class.getClassLoader();
-
+  
+  private static ConfigurationSettings.Reader reader =
+      new ConfigurationSettings.WithPrefix(PREFIX, new ConfigurationSettings.FromSystemProperties());
+  
+  private static SocketSettings socketSettings = new SocketSettings(reader);
 
   @BeforeClass
   public static void beforeClass() throws Exception {
@@ -76,10 +79,9 @@ public class RemoteTestBase {
     statistics = new StatisticsProvider();
     jmxReporter = JmxReporter.forRegistry(statistics.getRegistry()).build();
     jmxReporter.start();
-    keepAliveSettings = new KeepAlive.Settings();
-    socketSettings = new SocketSettings();
-    server = new RemoteServer(classLoader, new RemoteServer.Settings(statistics, keepAliveSettings, socketSettings));
-    service = server.start(createServerSocket());
+    server = new RemoteServer(classLoader, new RemoteServer.Settings(reader, statistics));
+    keepAliveSettings = server.getSettings().keepAliveSettings;
+    service = server.start(createServerCommFactory());
   }
 
   @AfterClass
@@ -93,14 +95,20 @@ public class RemoteTestBase {
   public void before() throws Exception {
     logger.info("Running before()");
     if (service.isClosed()) {
-      service = server.start(createServerSocket());
+      service = server.start(createServerCommFactory());
     }
+  }
+  
+  static CommunicationChannel.Factory createClientCommFactory() {
+    final SocketAddress endpoint = serverSocket.getLocalSocketAddress();
+    return new ObjectStreamChannel.ClientFactory(SocketFactory.getDefault(), socketSettings, endpoint, classLoader);
   }
 
   static RemoteClient createClient(final ClassLoader classLoader) {
-    final RemoteClient.Settings clientSettings = new RemoteClient.Settings(SocketFactory.getDefault(), service.getSocketAddress(), 
-                                                                           statistics, keepAliveSettings, socketSettings);
-    return new RemoteClient(classLoader, clientSettings);
+    final CommunicationChannel.Factory commFactory = createClientCommFactory();
+    final RemoteClient.Settings clientSettings = new RemoteClient.Settings(reader, statistics);
+    
+    return new RemoteClient(commFactory, classLoader, clientSettings);
   }
 
   static void connectNotBound(final Class<?> classType, final RemoteClient client) throws Exception {
@@ -113,10 +121,16 @@ public class RemoteTestBase {
     }
   }
 
+  static CommunicationChannel.Factory createServerCommFactory() throws IOException {
+    serverSocket = createServerSocket();
+    socketSettings.reload();
+    return new ObjectStreamChannel.ServerFactory(serverSocket, socketSettings, classLoader);
+  }
+
   static ServerSocket createServerSocket() throws IOException {
     return new ServerSocket(LISTEN_PORT);
   }
-
+  
   static <T> List<T> runTasks(final int tasks, final int threads, final Callable<T> task) {
     final ThreadFactory threadFactory = new ThreadFactoryBuilder().factoryNamePrefix(RemoteTestBase.class.getCanonicalName()).build();
     final ExecutorService executor = Executors.newFixedThreadPool(threads, threadFactory);

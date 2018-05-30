@@ -29,7 +29,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import java.io.Closeable;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -73,9 +72,6 @@ public class KeepAlive implements AutoCloseable {
    * Configuration settings for the keep-alive handler.
    */
   public static class Settings extends ConfigurationSettings {
-    /** The default prefix to use when reading settings from a {@link Properties} object. */
-    public static final String KEEP_ALIVE_PREFIX = "muxrmi.keep-alive.";
-
     /** The interval (in seconds) to send keep-alive packages. */
     public final LongValue intervalSec = new LongValue("interval", 5);
     
@@ -89,18 +85,12 @@ public class KeepAlive implements AutoCloseable {
     public final LongValue pollIntervalSec = new LongValue("poll-interval", 1);
 
     /**
-     * Create a new settings object that reads settings from system properties with the prefix {@link #KEEP_ALIVE_PREFIX}.
-     */
-    public Settings() {
-      super(KEEP_ALIVE_PREFIX);
-    }
-    
-    /**
      * Create a new settings object that read settings from the specified reader.
      * @param reader
      */
     public Settings(final ConfigurationSettings.Reader reader) {
-      super(reader);
+      super(new WithPrefix("keep-alive", reader));
+      reload();
     }
 
     /** {@inheritDoc} */

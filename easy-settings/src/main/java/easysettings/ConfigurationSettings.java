@@ -93,20 +93,15 @@ public abstract class ConfigurationSettings {
   }
 
   /**
-   * Create and reload configuration settings read from system properties with the specified prefix.
-   */
-  public ConfigurationSettings(final String prefix) {
-    this(new FromSystemProperties(prefix));
-  }
-
-  /**
    * Create and reload the configuration settings.
    */
   public ConfigurationSettings(final Reader reader) {
     this.reader = reader;
-    reload();
   }
 
+  /**
+   * Interface for a reader that knows how to read configuration settings.
+   */
   public interface Reader {
     /**
      * Read the configured value for the specified setting name.
@@ -114,17 +109,34 @@ public abstract class ConfigurationSettings {
      * @return the configuration value, or {@code null} if the value hasn't been set.
      */
     String readSetting(final String name);
+    
+    /**
+     * Write a new value for the specified setting name (optional operation).
+     * @param name the setting name.
+     * @param value the setting value.
+     */
+    <T> void writeSetting(final String name, final T value);
   }
 
   /**
    * Reload all configuration values.
    */
-  public void reload() {
+  public synchronized void reload() {
     for (final Value<?> value : values.values()) {
       try {
         value.reload();
       } catch (final Throwable cause) {
         if (logger.isErrorEnabled()) logger.error("Error reading configuration setting value: " + value, cause); //$NON-NLS-1$
+      }
+    }
+  }
+  
+  public synchronized void store() {
+    for (final Value<?> value : values.values()) {
+      try {
+        value.store();
+      } catch (final Throwable cause) {
+        if (logger.isErrorEnabled()) logger.error("Error storing configuration setting value: " + value, cause); //$NON-NLS-1$
       }
     }
   }
@@ -154,38 +166,79 @@ public abstract class ConfigurationSettings {
   }
 
   /**
+   * Configuration settings read from default values.
+   */
+  public static final Reader DEFAULTS = new Reader() {
+    @Override
+    public String readSetting(String name) {
+      return null;
+    }
+    
+    @Override
+    public void writeSetting(String name, Object value) {
+      // intentionally empty
+    }
+  };
+  
+  /**
+   * Configuration settings read from another reader with a prefix.
+   */
+  public static class WithPrefix implements Reader {
+    private final String prefix;
+    private final Reader reader;
+    
+    /**
+     * @param prefix the prefix.
+     * @param reader the reader to read from.
+     */
+    public WithPrefix(final String prefix, Reader reader) {
+      this.prefix = prefix;
+      this.reader = reader;
+    }
+    
+    @Override
+    public String readSetting(final String name) {
+      return reader.readSetting(prefix + name);
+    }
+    
+    public <T> void writeSetting(final String name, final T value) {
+      reader.writeSetting(prefix + name, value);
+    }
+    
+    @Override
+    public String toString() {
+      return "WithPrefix [" + prefix + ", " + super.toString() + "]";
+    }
+  }
+  
+  /**
    * Configuration settings read from a {@link Properties} object.
    */
   public static class FromProperties implements Reader {
-    private final String prefix;
     private final Properties properties;
 
     /**
-     * @param prefix the prefix to prepend to the setting names to form property keys.
      * @param properties the properties object.
      */
-    public FromProperties(final String prefix, final Properties properties) {
-      this.prefix = prefix;
+    public FromProperties(final Properties properties) {
       this.properties = properties;
     }
     
-    /**
-     * @return the prefix being prepended to the setting names to form property keys.
-     */
-    public String getPrefix() {
-      return prefix;
-    }
-
     /** {@inheritDoc} */
     @Override
     public String readSetting(final String name) {
-      return properties.getProperty(prefix + name);
+      return properties.getProperty(name);
+    }
+    
+    @Override
+    public <T> void writeSetting(final String name, final T value) {
+      properties.setProperty(name, value.toString());
     }
     
     /** {@inheritDoc} */
     @Override
     public String toString() {
-      return String.format("FromProperties [prefix=%s]", prefix);
+      return String.format("FromProperties [%s]", properties);
     }
   }
 
@@ -194,16 +247,16 @@ public abstract class ConfigurationSettings {
    */
   public static class FromSystemProperties extends FromProperties {
     /**
-     * @param prefix the prefix to prepend to the setting names to form a properties key.
+     * Default c'tor.
      */
-    public FromSystemProperties(final String prefix) {
-      super(prefix, System.getProperties());
+    public FromSystemProperties() {
+      super(System.getProperties());
     }
     
     /** {@inheritDoc} */
     @Override
     public String toString() {
-      return String.format("FromSystemProperties [prefix=%s]", getPrefix());
+      return String.format("FromSystemProperties [%s]", System.getProperties());
     }
   }
 
@@ -248,6 +301,11 @@ public abstract class ConfigurationSettings {
      */
     T reload();
 
+    /**
+     * Store the current value in the underlying configuration storage (optional operation).  
+     */
+    void store();
+    
     /**
      * Add a new listener.
      * @param listener the listener to add.
@@ -326,7 +384,7 @@ public abstract class ConfigurationSettings {
     public synchronized T reload() {
       final String stringValue = reader.readSetting(name);
       if(stringValue != null) {
-        if (image.get() != null && !image.get().equals(stringValue)) {
+        if (image.get() == null || !image.get().equals(stringValue)) {
           final T newValue = valueOf(stringValue);
           if (newValue != null) {
             image.set(stringValue);
@@ -345,6 +403,11 @@ public abstract class ConfigurationSettings {
         if (logger.isTraceEnabled()) logger.trace("Reverting to default value for setting '{}': '{}'", name, defaultValue);
       }
       return null;
+    }
+    
+    @Override
+    public synchronized void store() {
+      reader.writeSetting(name, value.get());
     }
 
     /** {@inheritDoc} */

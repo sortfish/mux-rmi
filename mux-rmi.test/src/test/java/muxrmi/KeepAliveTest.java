@@ -142,30 +142,29 @@ public class KeepAliveTest extends RemoteTestBase {
   @Test
   public void testKeepAliveFailureDisconnect() throws Exception {
     logger.info("Running testKeepAliveFailureDisconnect()");
-    final RemoteClient client = createClient(getClass().getClassLoader());
     try (KeepAliveTester keepAliveTester = new KeepAliveTester(keepAliveSettings)) {
-      final API api = client.connect(API.class);
-      final Collection<Connection> connections = client.getConnections();
-      Assert.assertEquals(connections.toString(), 1, connections.size());
-
-      final Connection connection = connections.iterator().next();
-      final KeepAlive keepAlive = client.getKeepAlive();
-      final KeepAlive.Task task = keepAlive.findTask(connection.protocol);
-      Assert.assertNotNull("Did not find keep-alive task for connection: " + connection, task);
-      Assert.assertTrue("Stopping keep-alive for connection failed: " + connection, keepAlive.stop(connection.protocol));
-      Assert.assertTrue("Task was not closed: " + task, task.closed);
-
-      final long secondsToSleep = KEEP_ALIVE_INTERVAL_SEC + KEEP_ALIVE_MARGIN_SEC + 1;
-      Thread.sleep(TimeUnit.SECONDS.toMillis(secondsToSleep));
-
-      try {
-        api.echo(42);
-        Assert.fail("Method invocation on remote connection did not fail as expected: " + connection.protocol);
-      } catch (final Exception e) {
-        logger.info("Expected socket error from disconnected remote connection: " + e);
+      try (final RemoteClient client = createClient(getClass().getClassLoader())) {
+        final API api = client.connect(API.class);
+        final Collection<Connection> connections = client.getConnections();
+        Assert.assertEquals(connections.toString(), 1, connections.size());
+  
+        final Connection connection = connections.iterator().next();
+        final KeepAlive keepAlive = client.getKeepAlive();
+        final KeepAlive.Task task = keepAlive.findTask(connection.protocol);
+        Assert.assertNotNull("Did not find keep-alive task for connection: " + connection, task);
+        Assert.assertTrue("Stopping keep-alive for connection failed: " + connection, keepAlive.stop(connection.protocol));
+        Assert.assertTrue("Task was not closed: " + task, task.closed);
+  
+        final long secondsToSleep = KEEP_ALIVE_INTERVAL_SEC + KEEP_ALIVE_MARGIN_SEC + 1;
+        Thread.sleep(TimeUnit.SECONDS.toMillis(secondsToSleep));
+  
+        try {
+          api.echo(42);
+          Assert.fail("Method invocation on remote connection did not fail as expected: " + connection.protocol);
+        } catch (final Exception e) {
+          logger.info("Expected socket error from disconnected remote connection: " + e);
+        }
       }
-    } finally {
-      client.close();
     }
   }
 
@@ -227,6 +226,7 @@ public class KeepAliveTest extends RemoteTestBase {
         this.originalKeepAliveInterval = settings.intervalSec.set(KEEP_ALIVE_INTERVAL_SEC);
         this.originalKeepAliveMargin = settings.sendMarginSec.set(KEEP_ALIVE_MARGIN_SEC);
         settings.recvMarginSec.set(KEEP_ALIVE_MARGIN_SEC);
+        settings.store();
       }
     }
 
@@ -304,6 +304,7 @@ public class KeepAliveTest extends RemoteTestBase {
         settings.intervalSec.set(originalKeepAliveInterval);
         settings.sendMarginSec.set(originalKeepAliveMargin);
         settings.recvMarginSec.set(originalKeepAliveMargin);
+        settings.store();
       }
     }
   }

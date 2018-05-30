@@ -28,26 +28,25 @@ import static muxrmi.Protocol.State.CLOSED;
 import static muxrmi.Protocol.State.INITIAL;
 import static muxrmi.Protocol.State.RUNNING;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.InvalidClassException;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.net.Socket;
 import java.rmi.NotBoundException;
 import java.rmi.Remote;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import muxrmi.io.Command;
+import muxrmi.io.CommunicationChannel;
 
 /**
  * Common client/server implementation of the remote connection protocol.
@@ -95,61 +94,41 @@ abstract class Protocol implements AutoCloseable {
   /**
    * The context of a protocol instances is a {@link Registry}, with the following additional elements:
    * <ul>
-   * <li>A {@link Connection} object.</li>
+   * <li>A {@link CommunicationChannel} object.</li>
    * <li>A {@link SharedState} object.</li>
    * </ul>
    * Like a registry, the context object can be either top-level or a child of a parent context.
    */
   private static class Context extends Registry {
-    final Connection con;
+    final CommunicationChannel comm;
     final SharedState state;
     final ClassLoader classLoader;
 
     /**
      * Create a new top-level context for the specified socket connection and class loader.
-     * @param socket the connected socket.
+     * @param comm the communication channel to the remote endpoint.
      * @param classLoader the class loader.
      */
-    Context(final Socket socket, final ClassLoader classLoader) {
-      this.con = new Connection(socket, classLoader);
+    Context(final CommunicationChannel comm, final ClassLoader classLoader) {
+      this.comm = comm;
       this.state = new SharedState();
       this.classLoader = classLoader;
     }
 
     /**
-     * Create a child context of the specified parent context. The connection, shared state 
-     * and class loader of the new context will be taken from the parent context.
+     * Create a child context of the specified parent context. The communication channel,
+     * shared state and class loader of the new context will be taken from the parent context.
      * @param parent the parent context.
      */
     Context(final Context parent) {
       super(parent);
-      this.con = parent.con;
+      this.comm = parent.comm;
       this.state = parent.state;
       this.classLoader = parent.classLoader;
     }
   }
 
-  /**
-   * Unique identity of a remote protocol instance.
-   * <p/>
-   * The unique identity consists of a sequence number which is assigned from
-   * a global counter every time a new identity instance is created.
-   * <p/>
-   * This ID is printed in log statements to make it easy to track activity
-   * of a specific protocol instance.
-   */
-  private static final class Identity {
-    private static final AtomicLong ID = new AtomicLong();
-    private final long id = ID.getAndIncrement();
-    
-    @Override
-    public String toString() {
-      return "Protocol#" + id;
-    }
-  }
-  
   private final Set<Class<?>> remoteClasses = new HashSet<>();
-  private final Identity identity = new Identity();
   private final Context ctx;
   private volatile boolean isClosed = false;
 
@@ -164,12 +143,12 @@ abstract class Protocol implements AutoCloseable {
   }
 
   /**
-   * Create a top-level protocol instance that communicates on the specified socket connection.
-   * @param socket an accepted socket connection to the remote party.
+   * Create a top-level protocol instance that communicates on the specified connection.
+   * @param comm the communication channel to the remote endpoint.
    * @param classLoader The class loader to use when loading classes.
    */
-  private Protocol(final Socket socket, final ClassLoader classLoader) {
-    this(new Context(socket, classLoader));
+  private Protocol(final CommunicationChannel comm, final ClassLoader classLoader) {
+    this(new Context(comm, classLoader));
   }
   
   /**
@@ -181,11 +160,11 @@ abstract class Protocol implements AutoCloseable {
 
     /**
      * Create a top-level client-side protocol instance on the specified socket connection.
-     * @param socket the socket.
+     * @param comm the communication channel to the remote endpoint.
      * @param classLoader the class loader to use when loading classes.
      */
-    public Client(final Socket socket, final ClassLoader classLoader) {
-      super(socket, classLoader);
+    public Client(final CommunicationChannel comm, final ClassLoader classLoader) {
+      super(comm, classLoader);
       this.topLevel = true;
     }
 
@@ -244,13 +223,13 @@ abstract class Protocol implements AutoCloseable {
    */
   static final class Server extends Protocol {
     /**
-     * Create a top-level server-side protocol instance on the specified socket connection.
-     * @param socket the socket.
+     * Create a top-level server-side protocol instance on the specified connection.
+     * @param comm the communication channel to the remote endpoint.
      * @param registry a {@link Registry} describing the methods which are available for remote invocation.
      * @param classLoader the class loader to use when loading classes.
      */
-    public Server(final Socket socket, final Registry registry, final ClassLoader classLoader) {
-      super(socket, classLoader);
+    public Server(final CommunicationChannel comm, final Registry registry, final ClassLoader classLoader) {
+      super(comm, classLoader);
       super.ctx.init(registry);
     }
     
@@ -301,10 +280,10 @@ abstract class Protocol implements AutoCloseable {
       // Exception thrown by a local method invocation.
       throw e;
     } catch (final IOException e) {
-      logger.debug("{} I/O error: {}", identity, e.toString()); //$NON-NLS-1$
+      logger.debug("{} I/O error: {}", id(), e.toString()); //$NON-NLS-1$
       throw e;
     } catch (final NotBoundException e) {
-      logger.debug("{} Not bound: {}", identity, e.getMessage()); //$NON-NLS-1$
+      logger.debug("{} Not bound: {}", id(), e.getMessage()); //$NON-NLS-1$
       throw e;
     } catch (final Throwable cause) {
       logger.error(this + " Unhandled exception", cause); //$NON-NLS-1$
@@ -354,10 +333,10 @@ abstract class Protocol implements AutoCloseable {
   }
 
   /**
-   * @return {@code true} iff we have a connected socket reference, {@code false} otherwise.
+   * @return {@code true} iff we have an open channel to the remote endpoint, {@code false} otherwise.
    */
   boolean isConnected() {
-    return ctx.con.isConnected();
+    return ctx.comm.isConnected();
   }
 
   /**
@@ -365,10 +344,14 @@ abstract class Protocol implements AutoCloseable {
    */
   void disconnect() {
     if (!isClosed) {
-      ctx.con.close();
+      try {
+        ctx.comm.close();
+      } catch (IOException e) {
+        logger.error(id() + " Disconnect error", e);
+      }
       ctx.state.update(CLOSED);
       isClosed = true;
-      logger.debug("{} Disconnected", identity);
+      logger.debug("{} Disconnected", id());
     }
   }
 
@@ -386,7 +369,7 @@ abstract class Protocol implements AutoCloseable {
   public synchronized void close() {
     if (isClosed) return;
     
-    logger.debug("{} Closed", identity); //$NON-NLS-1$
+    logger.debug("{} Closed", id()); //$NON-NLS-1$
     try {
       if (ctx.isTopLevel()) {
         if (isConnected()) {
@@ -394,24 +377,24 @@ abstract class Protocol implements AutoCloseable {
         }
       }
     } catch (final Exception e) {
-      if (logger.isDebugEnabled()) logger.debug(identity + " Error in close", e); //$NON-NLS-1$
+      if (logger.isDebugEnabled()) logger.debug(id() + " Error in close", e); //$NON-NLS-1$
     } finally {
       isClosed = true;
     }
   }
 
   /**
-   * @return a short string that unique identifies this protocol instance.
+   * @return an identity that uniquely identifies this protocol instance.
    */
-  public String id() {
-    return identity.toString();
+  public Identity id() {
+    return ctx.comm.id();
   }
   
   @Override
   public String toString() {
     return id() + " ["
          + getName()
-         + ", connection=" + ctx.con + "]";
+         + ", comm=" + ctx.comm + "]";
   }
 
   @Override
@@ -419,56 +402,6 @@ abstract class Protocol implements AutoCloseable {
     if (!isClosed())
       if (logger.isWarnEnabled()) logger.warn("{} Closing in finalizer", this);
       close();
-  }
-
-  /**
-   * Enumeration with the legal protocol commands.
-   */
-  enum Command {
-    /** A continuation command which does not require a response */
-    CONTINUE(0),
-    /** A confirmation with no additional data, e.g. the result of calling a method returning 'void' */
-    OK(1),
-    /** An error response, followed by: {@link Exception} */
-    ERROR(2),
-    /** A service bind request, followed by: classRef:{@link ClassRef} */
-    BIND(3),
-    /** A method call command, followed by: methodRef:{@link MethodRef} */
-    CALL(4),
-    /** A result value for the last command: {@link Object}(result) */
-    RESULT(5),
-    /** The final command, used to terminate the connection. */
-    END(6);
-
-    private final int command;
-
-    private Command(final int command) {
-      this.command = command;
-    }
-
-    /**
-     * @return the byte value (as an int) of this command.
-     */
-    public int get() {
-      return command;
-    }
-
-    static final Command[] COMMANDS = Command.values();
-
-    /**
-     * @param command the byte value (as an int) of the command.
-     * @return the {@link Command} instance corresponding to the byte value.
-     * @throws EOFException if the command value is an EOF value (-1).
-     */
-    public static Command get(final int command) throws EOFException {
-      if (command >= 0 && command < COMMANDS.length) {
-        return COMMANDS[command];
-      }
-      if (command == -1) {
-        throw new EOFException("EOF"); //$NON-NLS-1$
-      }
-      throw new IllegalArgumentException("Illegal command value: " + command); //$NON-NLS-1$
-    }
   }
 
   /**
@@ -625,17 +558,16 @@ abstract class Protocol implements AutoCloseable {
   }
 
   /**
-   * Read the next {@link Command} from the input stream.
+   * Read the next {@link Command} from the communication channel.
    * @return the command.
    * @throws Exception if a command could not be read.
    */
-  protected final Protocol.Command read() throws Exception {
+  protected final Command read() throws Exception {
     ctx.state.update(ACCEPT);
-    final int cmd = ctx.con.in().read();
+    final Command command = ctx.comm.readCommand();
     ctx.state.update(RUNNING);
-    final Command command = Command.get(cmd);
 
-    if (logger.isTraceEnabled()) logger.trace("{} <- {}", identity, command); //$NON-NLS-1$
+    if (logger.isTraceEnabled()) logger.trace("{} <- {}", id(), command); //$NON-NLS-1$
     return command;
   }
 
@@ -645,9 +577,9 @@ abstract class Protocol implements AutoCloseable {
    * @throws Exception (IOException | ClassCastException) if an object could not be read
    */
   protected final Object readObject() throws Exception {
-    final Object res = ctx.con.in().readObject();
+    final Object res = ctx.comm.readObject();
 
-    if (logger.isTraceEnabled()) logger.trace("{} <- {}", identity, res); //$NON-NLS-1$
+    if (logger.isTraceEnabled()) logger.trace("{} <- {}", id(), res); //$NON-NLS-1$
     return res;
   }
 
@@ -657,16 +589,14 @@ abstract class Protocol implements AutoCloseable {
    * @param args the arguments.
    * @throws IOException if the command could not be written.
    */
-  protected final synchronized void write(final Protocol.Command command, final Object... args) throws IOException {
-    if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", new Object[] {identity, command, Arrays.toString(args)}); //$NON-NLS-1$
+  protected final synchronized void write(final Command command, final Object... args) throws IOException {
+    if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", new Object[] {id(), command, Arrays.toString(args)}); //$NON-NLS-1$
 
-    final ObjectOutputStream out = ctx.con.out();
-    out.reset();
-    out.write(command.get());
+    ctx.comm.writeCommand(command);
     for (final Object arg : args) {
-      out.writeObject(arg);
+      ctx.comm.writeObject(arg);
     }
-    out.flush();
+    ctx.comm.flush();
     ctx.state.update(RUNNING);
   }
 

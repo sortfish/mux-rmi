@@ -30,8 +30,6 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.Socket;
-import java.net.SocketAddress;
 import java.rmi.NotBoundException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,12 +46,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 
-import javax.net.SocketFactory;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import easysettings.ConfigurationSettings;
 import muxrmi.Protocol.ClassRef;
+import muxrmi.io.CommunicationChannel;
+import muxrmi.io.CommunicationChannel.Factory;
 
 
 /**
@@ -74,6 +73,7 @@ public class RemoteClient implements AutoCloseable {
   private final ProxyObjects proxyObjects = new ProxyObjects();
 
   private final Connections connections = new Connections();
+  private final Factory commFactory;
   private final ClassLoader classLoader;
   private final Settings settings;
   private final KeepAlive keepAlive;
@@ -81,54 +81,41 @@ public class RemoteClient implements AutoCloseable {
   /**
    * Configuration settings for a remote client.
    */
-  public static class Settings {
-    final SocketFactory socketFactory;
-    final SocketAddress endpoint;
+  public static class Settings extends ConfigurationSettings {
     final StatisticsProvider statistics; 
     final KeepAlive.Settings keepAliveSettings;
-    final SocketSettings socketSettings;
+    
+    final IntegerValue connectionPoolLifetime = new IntegerValue("connection-pool-lifetime", 60); // seconds
 
     /**
-     * Remote client settings with default keep-alive settings.
-     * @param socketFactory a socket factory for connecting to the remote server.
-     * @param endpoint the socket address endpoint to connect to.
-     */
-    public Settings(final SocketFactory socketFactory, final SocketAddress endpoint) {
-      this(socketFactory, endpoint, new StatisticsProvider(), new KeepAlive.Settings(), new SocketSettings());
-    }
-
-    /**
-     * @param socketFactory a socket factory for connecting to the remote server.
-     * @param endpoint the socket address endpoint to connect to.
+     * @param reader the reader to read configuration settings from.
      * @param statistics the statistics to use.
-     * @param keepAliveSettings the keep-alive settings.
-     * @param socketSettings the socket settings.
      */
-    public Settings(final SocketFactory socketFactory,
-                    final SocketAddress endpoint,
-                    final StatisticsProvider statistics,
-                    final KeepAlive.Settings keepAliveSettings,
-                    final SocketSettings socketSettings) {
-      this.socketFactory = socketFactory;
-      this.endpoint = endpoint;
+    public Settings(final Reader reader,
+                    final StatisticsProvider statistics) {
+      super(reader);
+      reload();
+      
       this.statistics = statistics;
-      this.keepAliveSettings = keepAliveSettings;
-      this.socketSettings = socketSettings;
+      this.keepAliveSettings = new KeepAlive.Settings(reader);
     }
     
     /** {@inheritDoc} */
     @Override
     public String toString() {
-      return String.format("Settings [endpoint=%s, keepAliveSettings=%s, socketSettings=%s]", endpoint, keepAliveSettings, socketSettings);
+      return String.format("Settings [keepAliveSettings=%s]", keepAliveSettings);
     }
   }
 
   /**
-   * Create a new remote client instance with the specified class loader and configuration settings.
+   * Create a new remote client instance with the specified communication channel factory,
+   * class loader and configuration settings.
+   * @param commFactory the communication channel factory.
    * @param classLoader a class loader for the objects read on the remote protocol.
    * @param settings the configuration settings for the remote client.
    */
-  public RemoteClient(final ClassLoader classLoader, final Settings settings) {
+  public RemoteClient(final CommunicationChannel.Factory commFactory, final ClassLoader classLoader, final Settings settings) {
+    this.commFactory = commFactory;
     this.classLoader = classLoader;
     this.settings = settings;
     this.keepAlive = new KeepAlive(settings.keepAliveSettings, settings.statistics);
@@ -357,11 +344,9 @@ public class RemoteClient implements AutoCloseable {
     }
 
     Connection createConnection() throws IOException {
-      final Socket socket = settings.socketFactory.createSocket();
-      settings.socketSettings.applyTo(socket);
-      socket.connect(settings.endpoint);
+      final CommunicationChannel comm = commFactory.create();
 
-      final Connection connection = new Connection(new Protocol.Client(socket, classLoader));
+      final Connection connection = new Connection(new Protocol.Client(comm, classLoader));
       connections.add(connection);
       return connection;
     }

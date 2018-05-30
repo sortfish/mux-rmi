@@ -26,8 +26,6 @@ package muxrmi;
 import java.io.IOException;
 import java.io.InvalidClassException;
 import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketAddress;
 import java.rmi.Remote;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -43,7 +41,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import easysettings.ConfigurationSettings.Reader;
 import muxrmi.Protocol.ClassRef;
+import muxrmi.io.CommunicationChannel;
 
 /**
  * Implementation of a Mux-RMI remote server.
@@ -96,34 +96,23 @@ public class RemoteServer implements AutoCloseable {
    * Configuration settings for a remote server.
    */
   public static class Settings {
-    private final StatisticsProvider statistics;
-    private final KeepAlive.Settings keepAliveSettings;
-    private final SocketSettings socketSettings;
+    /** The statistics provider */
+    public final StatisticsProvider statistics;
+    
+    /** The keep-alive settings */
+    public final KeepAlive.Settings keepAliveSettings;
 
     /**
-     * Create default configuration settings.
-     * @return the default configuration settings.
-     */
-    public static Settings getDefault() {
-      return new Settings(new StatisticsProvider(), new KeepAlive.Settings(), new SocketSettings());
-    }
-
-    /**
-     * Create configuration settings with the specified statistics provider, keep-alive settings and socket settings.
+     * @param reader the reader to read configuration settings from.
      * @param statistics the statistics provider.
-     * @param keepAliveSettings the keep-alive settings.
-     * @param socketSettings the socket settings.
      */
-    public Settings(final StatisticsProvider statistics,
-                    final KeepAlive.Settings keepAliveSettings,
-                    final SocketSettings socketSettings) {
+    public Settings(final Reader reader, final StatisticsProvider statistics) {
       this.statistics = statistics;
-      this.keepAliveSettings = keepAliveSettings;
-      this.socketSettings = socketSettings;
+      this.keepAliveSettings = new KeepAlive.Settings(reader);
     }
     
     public String toString() {
-      return String.format("Settings [keepAliveSettings=%s, socketSettings=%s]", keepAliveSettings, socketSettings);
+      return String.format("Settings [keepAliveSettings=%s]", keepAliveSettings);
     }
   }
 
@@ -139,6 +128,13 @@ public class RemoteServer implements AutoCloseable {
     this.classLoader = classLoader;
     
     logger.info("{}", this);
+  }
+  
+  /**
+   * @return the configuration settings for this remote server.
+   */
+  public Settings getSettings() {
+    return settings;
   }
 
   /**
@@ -232,26 +228,21 @@ public class RemoteServer implements AutoCloseable {
     boolean isClosed();
 
     /**
-     * @return the socket address of the remote service.
-     */
-    SocketAddress getSocketAddress();
-
-    /**
      * @return the current number of connected remote instances.
      */
     int getInstanceCount();
   }
 
   /**
-   * Start a remote {@link Service} listening on the specified server socket.
-   * @param serverSocket the server socket.
+   * Start a remote {@link Service} on the specified communication channel factory.
+   * @param commFactory the communication channel factory.
    * @return An {@link Service} reference to the remote server instance.
    */
-  public synchronized Service start(final ServerSocket serverSocket) {
-    final Acceptor acceptor = new Acceptor(serverSocket);
+  public synchronized Service start(final CommunicationChannel.Factory commFactory) {
+    final Acceptor acceptor = new Acceptor(commFactory);
     services.add(acceptor);
     executor.execute(acceptor);
-    logger.info("Remote server started: {}", serverSocket);
+    logger.info("Remote server started: {}", commFactory);
     return acceptor;
   }
 
@@ -292,10 +283,10 @@ public class RemoteServer implements AutoCloseable {
    */
   private class Acceptor implements Runnable, Service {
     private final Map<Object, Connection> connections = new ConcurrentHashMap<>();
-    private final ServerSocket serverSocket;
+    private final CommunicationChannel.Factory commFactory;
 
-    Acceptor(final ServerSocket serverSocket) {
-      this.serverSocket = serverSocket;
+    Acceptor(final CommunicationChannel.Factory commFactory) {
+      this.commFactory = commFactory;
       stats.connectionCount.update();
     }
 
@@ -316,13 +307,11 @@ public class RemoteServer implements AutoCloseable {
       try {
         do {
           try {
-            final Socket socket = serverSocket.accept();
-            settings.socketSettings.applyTo(socket);
-
-            final Connection connection = new Connection(new Protocol.Server(socket, registry, classLoader), this);
-            executor.execute(connection);
+            final CommunicationChannel comm = commFactory.create();
+            final Runnable command = new Connection(new Protocol.Server(comm, registry, classLoader), this);
+            executor.execute(command);
           } catch (final Exception e) {
-            if (serverSocket.isClosed()) {
+            if (commFactory.isClosed()) {
               return;
             } else {
               logger.error("Error in remote server: " + e.getMessage(), e);
@@ -331,7 +320,7 @@ public class RemoteServer implements AutoCloseable {
         } while (true);
       } finally {
         try {
-          serverSocket.close();
+          commFactory.close();
         } catch (final Exception e) {
           logger.error("Error closing server socket in remote server", e);
         }
@@ -343,9 +332,9 @@ public class RemoteServer implements AutoCloseable {
     public void close() {
       try {
         services.remove(this);
-        serverSocket.close();
+        commFactory.close();
       } catch (final IOException e) {
-        logger.error("Error closing server socket: " + serverSocket, e);
+        logger.error("Error closing server socket: " + commFactory, e);
       }
 
       for (final Connection connection : connections.values()) {
@@ -356,13 +345,7 @@ public class RemoteServer implements AutoCloseable {
     /** {@inheritDoc} */
     @Override
     public boolean isClosed() {
-      return serverSocket.isClosed();
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public SocketAddress getSocketAddress() {
-      return serverSocket.getLocalSocketAddress();
+      return commFactory.isClosed();
     }
 
     /** {@inheritDoc} */

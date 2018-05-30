@@ -40,8 +40,6 @@ import easysettings.ConfigurationSettings;
 public class SocketSettings extends ConfigurationSettings {
   private static final Logger logger = LoggerFactory.getLogger(SocketSettings.class);
 
-  private static final String PREFIX = "muxrmi.";
-
   /** Socket read timeout (SO_TIMEOUT) , in seconds. */
   public final IntegerValue soTimeout = new IntegerValue("so-timeout", 0);
   
@@ -52,22 +50,19 @@ public class SocketSettings extends ConfigurationSettings {
   public final BooleanValue tcpNoDelay = new BooleanValue("tcp-no-delay", true);
 
   /**
-   * Read socket settings from the system properties using the prefix '{@code muxrmi.}' 
-   */
-  public SocketSettings() {
-    super(PREFIX);
-    logger.info("SocketSettings: {}", this);
-  }
-
-  /**
    * Read socket settings from the specified reader.
    * @param reader the reader
    */
   public SocketSettings(ConfigurationSettings.Reader reader) {
     super(reader);
+    reload();
   }
   
-  void applyTo(final Socket socket) {
+  /**
+   * Apply the socket settings to the specified socket.
+   * @param socket the socket.
+   */
+  public void applyTo(final Socket socket) {
     if (logger.isDebugEnabled()) logger.debug("Applying socket settings to '{}': {}", socket, this);
     try {
       socket.setSoTimeout((int)SECONDS.toMillis(soTimeout.get()));
