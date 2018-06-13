@@ -66,17 +66,25 @@ public class ServerAcceptorStressTest extends RemoteTestBase {
 
 
   @Test
-  public void testAcceptorThroughput250() throws Exception {
-    logger.info("Running testAcceptorThroughput250()");
-    final int sz = 250;
+  public void testAcceptorThroughput200() throws Exception {
+    logger.info("Running testAcceptorThroughput200()");
+    final int sz = 200;
     runTasks(sz, 1, new ProxyTask());
   }
 
 
   @Test
-  public void testAcceptorThroughput500() throws Exception {
+  public void testAcceptorThroughput400() throws Exception {
     logger.info("Running testAcceptorThroughput500()");
-    final int sz = 500;
+    final int sz = 400;
+    runTasks(sz, 1, new ProxyTask());
+  }
+
+
+  @Test
+  public void testAcceptorThroughput800() throws Exception {
+    logger.info("Running testAcceptorThroughput1000()");
+    final int sz = 800;
     runTasks(sz, 1, new ProxyTask());
   }
 
@@ -90,7 +98,7 @@ public class ServerAcceptorStressTest extends RemoteTestBase {
 
 
   @Test
-  public void testAcceptorParallelism250() throws Exception {
+  public void testAcceptorParallelism200() throws Exception {
     logger.info("Running testAcceptorParallelism250()");
     final int sz = 250;
     runTasks(sz, sz, new ProxyTask());
@@ -98,9 +106,17 @@ public class ServerAcceptorStressTest extends RemoteTestBase {
 
 
   @Test
-  public void testAcceptorParallelism500() throws Exception {
+  public void testAcceptorParallelism400() throws Exception {
     logger.info("Running testAcceptorParallelism500()");
-    final int sz = 500;
+    final int sz = 400;
+    runTasks(sz, sz, new ProxyTask());
+  }
+
+
+  @Test
+  public void testAcceptorParallelism800() throws Exception {
+    logger.info("Running testAcceptorParallelism1000()");
+    final int sz = 800;
     runTasks(sz, sz, new ProxyTask());
   }
 
