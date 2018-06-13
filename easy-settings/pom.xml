@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.github.easy-settings</groupId>
   <artifactId>easy-settings</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <name>Easy-Settings</name>
   <description>Easy way of declaring configuration settings</description>
   <dependencies>

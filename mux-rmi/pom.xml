@@ -2,14 +2,14 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.sortfish</groupId>
   <artifactId>mux-rmi</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <name>Mux-RMI</name>
   <description>An 2-way multiplexed replacement for standard Java RMI</description>
   <dependencies>
   	<dependency>
   		<groupId>io.github.easy-settings</groupId>
   		<artifactId>easy-settings</artifactId>
-  		<version>[0.2,)</version>
+  		<version>[0.4,)</version>
   	</dependency>
   	<dependency>
   		<groupId>com.codahale.metrics</groupId>
