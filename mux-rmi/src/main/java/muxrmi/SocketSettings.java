@@ -40,7 +40,7 @@ import easysettings.ConfigurationSettings;
 public class SocketSettings extends ConfigurationSettings {
   private static final Logger logger = LoggerFactory.getLogger(SocketSettings.class);
 
-  /** Socket read timeout (SO_TIMEOUT) , in seconds. */
+  /** Socket read timeout (SO_TIMEOUT), in seconds. */
   public final IntegerValue soTimeout = new IntegerValue("so-timeout", 0);
   
   /** The "linger" time (SO_LINGER) for a closed socket, in seconds. */
@@ -56,6 +56,13 @@ public class SocketSettings extends ConfigurationSettings {
   public SocketSettings(ConfigurationSettings.Reader reader) {
     super(reader);
     reload();
+  }
+  
+  /**
+   * Create default socket settings.
+   */
+  public SocketSettings() {
+    this(ConfigurationSettings.DEFAULTS);
   }
   
   /**

@@ -68,7 +68,6 @@ public class RemoteServer implements AutoCloseable {
   private final Settings settings;
   private final Statistics stats;
   private final KeepAlive keepAlive;
-  private final ClassLoader classLoader;
 
   private List<ClassRef> findRemoteInterfaces(final Class<?> cls) throws InvalidClassException {
     final List<ClassRef> res = new ArrayList<>();
@@ -103,12 +102,20 @@ public class RemoteServer implements AutoCloseable {
     public final KeepAlive.Settings keepAliveSettings;
 
     /**
+     * @param keepAliveSettings the keep-alive settings.
+     * @param statistics the statistics provider.
+     */
+    public Settings(final KeepAlive.Settings keepAliveSettings, final StatisticsProvider statistics) {
+      this.statistics = statistics;
+      this.keepAliveSettings = keepAliveSettings;
+    }
+    
+    /**
      * @param reader the reader to read configuration settings from.
      * @param statistics the statistics provider.
      */
     public Settings(final Reader reader, final StatisticsProvider statistics) {
-      this.statistics = statistics;
-      this.keepAliveSettings = new KeepAlive.Settings(reader);
+      this(new KeepAlive.Settings(reader), statistics);
     }
     
     public String toString() {
@@ -118,14 +125,12 @@ public class RemoteServer implements AutoCloseable {
 
   /**
    * Create a new remote server with the specified class loader and configuration settings.
-   * @param classLoader a class loader for the objects read on the remote protocol.
    * @param settings the configuration settings for the remote server.
    */
-  public RemoteServer(final ClassLoader classLoader, final Settings settings) {
+  public RemoteServer(final Settings settings) {
     this.settings = settings;
     this.stats = new Statistics(settings.statistics);
     this.keepAlive = new KeepAlive(settings.keepAliveSettings, settings.statistics);
-    this.classLoader = classLoader;
     
     logger.info("{}", this);
   }
@@ -308,7 +313,7 @@ public class RemoteServer implements AutoCloseable {
         do {
           try {
             final CommunicationChannel comm = commFactory.create();
-            final Runnable command = new Connection(new Protocol.Server(comm, registry, classLoader), this);
+            final Runnable command = new Connection(new Protocol.Server(comm, registry), this);
             executor.execute(command);
           } catch (final Exception e) {
             if (commFactory.isClosed()) {

@@ -53,6 +53,7 @@ public class ObjectStreamChannel implements CommunicationChannel {
 
   private final Identity identity;
   private final Socket socket;
+  private final ClassLoader classLoader;
   private final LazyReference<ObjectInputStream> in;
   private final LazyReference<ObjectOutputStream> out;
 
@@ -64,6 +65,7 @@ public class ObjectStreamChannel implements CommunicationChannel {
   public ObjectStreamChannel(final Socket socket, final ClassLoader classLoader) {
     this.identity = new Identity();
     this.socket = socket;
+    this.classLoader = classLoader;
     this.in = new LazyReference<>(new Callable<ObjectInputStream>() {
       @Override
       public ObjectInputStream call() throws Exception {
@@ -208,6 +210,11 @@ public class ObjectStreamChannel implements CommunicationChannel {
   }
 
   @Override
+  public ClassLoader getClassLoader() {
+    return classLoader;
+  }
+
+  @Override
   public boolean isConnected() {
     return socket.isConnected() && !socket.isClosed();
   }
@@ -222,7 +229,6 @@ public class ObjectStreamChannel implements CommunicationChannel {
       }
      }
   }
-
   
   @Override
   public Command readCommand() throws IOException {

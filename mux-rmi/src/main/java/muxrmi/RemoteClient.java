@@ -74,7 +74,6 @@ public class RemoteClient implements AutoCloseable {
 
   private final Connections connections = new Connections();
   private final Factory commFactory;
-  private final ClassLoader classLoader;
   private final Settings settings;
   private final KeepAlive keepAlive;
 
@@ -83,21 +82,37 @@ public class RemoteClient implements AutoCloseable {
    */
   public static class Settings extends ConfigurationSettings {
     final StatisticsProvider statistics; 
-    final KeepAlive.Settings keepAliveSettings;
     
-    final IntegerValue connectionPoolLifetime = new IntegerValue("connection-pool-lifetime", 60); // seconds
+    /** The keep-alive settings */
+    public final KeepAlive.Settings keepAliveSettings;
+    
+    /** The lifetime of idle connections in the connection pool, in seconds */
+    public final IntegerValue idleLifetime = new IntegerValue("idle-lifetime", 60); // seconds
 
-    /**
-     * @param reader the reader to read configuration settings from.
-     * @param statistics the statistics to use.
-     */
-    public Settings(final Reader reader,
-                    final StatisticsProvider statistics) {
+    private Settings(final Reader reader, final KeepAlive.Settings keepAliveSettings, final StatisticsProvider statistics) {
       super(reader);
       reload();
       
+      this.keepAliveSettings = keepAliveSettings;
       this.statistics = statistics;
-      this.keepAliveSettings = new KeepAlive.Settings(reader);
+    }
+    
+    /**
+     * Use default settings and the specified keep-alive settings.
+     * @param keepAliveSettings the keep-alive settings.
+     * @param statistics the statistics to use.
+     */
+    public Settings(final KeepAlive.Settings keepAliveSettings, final StatisticsProvider statistics) {
+      this(ConfigurationSettings.DEFAULTS, keepAliveSettings, statistics);
+    }
+    
+    /**
+     * Read settings from the specified configuration settings reader.
+     * @param reader the reader to read configuration settings from.
+     * @param statistics the statistics to use.
+     */
+    public Settings(final Reader reader, final StatisticsProvider statistics) {
+      this(reader, new KeepAlive.Settings(reader), statistics);
     }
     
     /** {@inheritDoc} */
@@ -111,12 +126,10 @@ public class RemoteClient implements AutoCloseable {
    * Create a new remote client instance with the specified communication channel factory,
    * class loader and configuration settings.
    * @param commFactory the communication channel factory.
-   * @param classLoader a class loader for the objects read on the remote protocol.
    * @param settings the configuration settings for the remote client.
    */
-  public RemoteClient(final CommunicationChannel.Factory commFactory, final ClassLoader classLoader, final Settings settings) {
+  public RemoteClient(final CommunicationChannel.Factory commFactory, final Settings settings) {
     this.commFactory = commFactory;
-    this.classLoader = classLoader;
     this.settings = settings;
     this.keepAlive = new KeepAlive(settings.keepAliveSettings, settings.statistics);
   }
@@ -301,22 +314,24 @@ public class RemoteClient implements AutoCloseable {
     
     /**
      * Clean-up task for the pool of idle connections. This task will run periodically
-     * and close connections which have been idle for longer than {@link #CONNECTION_POOL_LIFETIME}
+     * and close connections which have been idle for longer than {@link #connectionPoolLifetime}
      * seconds.
      */
     private class ConnectionPoolCleanup implements Runnable, Closeable {
-      static final long CONNECTION_POOL_LIFETIME = 60; // TODO: make configurable
+      private static final int CLEANUP_INTERVAL = 1; // 1 second
+      
+      private final int connectionPoolLifetime = settings.idleLifetime.get();
       private final ScheduledFuture<?> scheduleFuture;
 
       ConnectionPoolCleanup() {
-        this.scheduleFuture = connectionPoolExecutor.scheduleAtFixedRate(this, CONNECTION_POOL_LIFETIME, CONNECTION_POOL_LIFETIME, SECONDS);
-        logger.debug("ConnectionPoolCleanup: scheduled to run every {}s", CONNECTION_POOL_LIFETIME);
+        this.scheduleFuture = connectionPoolExecutor.scheduleAtFixedRate(this, CLEANUP_INTERVAL, CLEANUP_INTERVAL, SECONDS);
+        logger.debug("ConnectionPoolCleanup: scheduled to run every {}s with a pool lifetime of {}s", CLEANUP_INTERVAL, connectionPoolLifetime);
       }
 
       @Override
       public void run() {
         final long now = System.currentTimeMillis();
-        final long deleteOlderThan = now - SECONDS.toMillis(CONNECTION_POOL_LIFETIME);
+        final long deleteOlderThan = now - SECONDS.toMillis(connectionPoolLifetime);
         synchronized (connectionPool) {
           final Map<Long, Connection> connectionsToRemove = connectionPool.headMap(deleteOlderThan, true);
           for (final Map.Entry<Long, Connection> entry : connectionsToRemove.entrySet()) {
@@ -327,7 +342,7 @@ public class RemoteClient implements AutoCloseable {
             closeConnection(entry.getValue());
           }
           connectionsToRemove.clear();
-          logger.debug("ConnectionPoolCleanup: active connections ({}): {}", connectionPool.size(), connectionPool);
+          logger.trace("ConnectionPoolCleanup: active connections ({}): {}", connectionPool.size(), connectionPool);
         }
       }
 
@@ -346,7 +361,7 @@ public class RemoteClient implements AutoCloseable {
     Connection createConnection() throws IOException {
       final CommunicationChannel comm = commFactory.create();
 
-      final Connection connection = new Connection(new Protocol.Client(comm, classLoader));
+      final Connection connection = new Connection(new Protocol.Client(comm));
       connections.add(connection);
       return connection;
     }

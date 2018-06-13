@@ -102,29 +102,25 @@ abstract class Protocol implements AutoCloseable {
   private static class Context extends Registry {
     final CommunicationChannel comm;
     final SharedState state;
-    final ClassLoader classLoader;
 
     /**
-     * Create a new top-level context for the specified socket connection and class loader.
+     * Create a new top-level context for the specified communication channel.
      * @param comm the communication channel to the remote endpoint.
-     * @param classLoader the class loader.
      */
-    Context(final CommunicationChannel comm, final ClassLoader classLoader) {
+    Context(final CommunicationChannel comm) {
       this.comm = comm;
       this.state = new SharedState();
-      this.classLoader = classLoader;
     }
 
     /**
      * Create a child context of the specified parent context. The communication channel,
-     * shared state and class loader of the new context will be taken from the parent context.
+     * and shared state of the new context will be taken from the parent context.
      * @param parent the parent context.
      */
     Context(final Context parent) {
       super(parent);
       this.comm = parent.comm;
       this.state = parent.state;
-      this.classLoader = parent.classLoader;
     }
   }
 
@@ -145,10 +141,9 @@ abstract class Protocol implements AutoCloseable {
   /**
    * Create a top-level protocol instance that communicates on the specified connection.
    * @param comm the communication channel to the remote endpoint.
-   * @param classLoader The class loader to use when loading classes.
    */
-  private Protocol(final CommunicationChannel comm, final ClassLoader classLoader) {
-    this(new Context(comm, classLoader));
+  private Protocol(final CommunicationChannel comm) {
+    this(new Context(comm));
   }
   
   /**
@@ -159,12 +154,11 @@ abstract class Protocol implements AutoCloseable {
     private String name;
 
     /**
-     * Create a top-level client-side protocol instance on the specified socket connection.
+     * Create a top-level client-side protocol instance on the specified communication channel.
      * @param comm the communication channel to the remote endpoint.
-     * @param classLoader the class loader to use when loading classes.
      */
-    public Client(final CommunicationChannel comm, final ClassLoader classLoader) {
-      super(comm, classLoader);
+    public Client(final CommunicationChannel comm) {
+      super(comm);
       this.topLevel = true;
     }
 
@@ -223,13 +217,12 @@ abstract class Protocol implements AutoCloseable {
    */
   static final class Server extends Protocol {
     /**
-     * Create a top-level server-side protocol instance on the specified connection.
+     * Create a top-level server-side protocol instance on the specified communication channel.
      * @param comm the communication channel to the remote endpoint.
      * @param registry a {@link Registry} describing the methods which are available for remote invocation.
-     * @param classLoader the class loader to use when loading classes.
      */
-    public Server(final CommunicationChannel comm, final Registry registry, final ClassLoader classLoader) {
-      super(comm, classLoader);
+    public Server(final CommunicationChannel comm, final Registry registry) {
+      super(comm);
       super.ctx.init(registry);
     }
     
@@ -932,7 +925,7 @@ abstract class Protocol implements AutoCloseable {
       throw new IllegalArgumentException(classType + " is not an interface"); //$NON-NLS-1$
     }
     
-    final RemoteProxyClassLoader proxyClassLoader = new RemoteProxyClassLoader(ctx.classLoader,
+    final RemoteProxyClassLoader proxyClassLoader = new RemoteProxyClassLoader(ctx.comm.getClassLoader(),
                                                                                classType.getClassLoader(),
                                                                                getClass().getClassLoader());
     final Class<?>[] interfaces = new Class<?>[] { classType, ProxyClass.class };

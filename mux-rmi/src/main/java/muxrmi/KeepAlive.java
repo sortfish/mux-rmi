@@ -92,6 +92,13 @@ public class KeepAlive implements AutoCloseable {
       super(new WithPrefix("keep-alive", reader));
       reload();
     }
+    
+    /**
+     * Create a new default settings object.
+     */
+    public Settings() {
+      this(ConfigurationSettings.DEFAULTS);
+    }
 
     /** {@inheritDoc} */
     @Override

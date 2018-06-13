@@ -79,7 +79,7 @@ public class RemoteTestBase {
     statistics = new StatisticsProvider();
     jmxReporter = JmxReporter.forRegistry(statistics.getRegistry()).build();
     jmxReporter.start();
-    server = new RemoteServer(classLoader, new RemoteServer.Settings(reader, statistics));
+    server = new RemoteServer(new RemoteServer.Settings(reader, statistics));
     keepAliveSettings = server.getSettings().keepAliveSettings;
     service = server.start(createServerCommFactory());
   }
@@ -99,16 +99,16 @@ public class RemoteTestBase {
     }
   }
   
-  static CommunicationChannel.Factory createClientCommFactory() {
+  static CommunicationChannel.Factory createClientCommFactory(final ClassLoader classLoader) {
     final SocketAddress endpoint = serverSocket.getLocalSocketAddress();
     return new ObjectStreamChannel.ClientFactory(SocketFactory.getDefault(), socketSettings, endpoint, classLoader);
   }
 
   static RemoteClient createClient(final ClassLoader classLoader) {
-    final CommunicationChannel.Factory commFactory = createClientCommFactory();
+    final CommunicationChannel.Factory commFactory = createClientCommFactory(classLoader);
     final RemoteClient.Settings clientSettings = new RemoteClient.Settings(reader, statistics);
     
-    return new RemoteClient(commFactory, classLoader, clientSettings);
+    return new RemoteClient(commFactory, clientSettings);
   }
 
   static void connectNotBound(final Class<?> classType, final RemoteClient client) throws Exception {

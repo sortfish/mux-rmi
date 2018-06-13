@@ -66,6 +66,11 @@ public interface CommunicationChannel extends AutoCloseable {
   Identity id();
   
   /**
+   * @return the class loader associated with this connection.
+   */
+  ClassLoader getClassLoader();
+  
+  /**
    * @return {@code true} if the connection to the remote endpoint is open,
    *         {@code false} otherwise.
    */
