@@ -197,9 +197,9 @@ public class RemoteServer implements AutoCloseable {
       super(statistics);
     }
     
-    Value threadCount = new Value(Statistics.class, "thread-count") {
+    Value threadCount = new CountedGauge(Statistics.class, "thread-count") {
       @Override
-      protected int get() {
+      protected long get() {
         if (executor instanceof ThreadPoolExecutor) {
           return ((ThreadPoolExecutor) executor).getPoolSize();
         }
@@ -207,7 +207,7 @@ public class RemoteServer implements AutoCloseable {
       }
     };
 
-    Counter connectionCount = new Counter(Statistics.class, "connection-count");
+    CountedValue connectionCount = new CountedValue(Statistics.class, "connection-count");
   }
 
   /**

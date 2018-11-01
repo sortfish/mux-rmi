@@ -125,9 +125,9 @@ public class KeepAlive implements AutoCloseable {
       super(statistics);
     }
     
-    final Value threadCount = new Value(Statistics.class, "thread-count") {
+    final Value threadCount = new CountedGauge(Statistics.class, "thread-count") {
       @Override
-      protected int get() {
+      protected long get() {
         if (scheduler instanceof ThreadPoolExecutor) {
           return ((ThreadPoolExecutor) scheduler).getPoolSize();
         }
@@ -135,7 +135,7 @@ public class KeepAlive implements AutoCloseable {
       }
     };
 
-    final Counter taskCount = new Counter(Statistics.class, "task-count");
+    final CountedValue taskCount = new CountedValue(Statistics.class, "task-count");
   }
 
   /**
