@@ -337,7 +337,7 @@ public class RemoteClient implements AutoCloseable {
           for (final Map.Entry<Long, Connection> entry : connectionsToRemove.entrySet()) {
             if (logger.isDebugEnabled()) {
               logger.debug("ConnectionPoolCleanup: removing connection at {}: {} (last used at {})",
-                           new Object[] {now, entry.getValue(), entry.getKey()});
+                           now, entry.getValue(), entry.getKey());
             }
             closeConnection(entry.getValue());
           }

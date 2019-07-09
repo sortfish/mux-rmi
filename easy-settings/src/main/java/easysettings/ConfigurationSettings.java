@@ -481,7 +481,7 @@ public abstract class ConfigurationSettings {
         return valueOf.apply(stringValue);
       } catch (final Exception e) {
         if (logger.isErrorEnabled()) logger.error("Error reading value '{}' of setting '{}': {}", //$NON-NLS-1$
-                                                  new Object[] {stringValue, this, e.getMessage()});
+                                                  stringValue, this, e.getMessage());
         return null;
       }
     }

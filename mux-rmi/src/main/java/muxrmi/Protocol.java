@@ -583,7 +583,7 @@ abstract class Protocol implements AutoCloseable {
    * @throws IOException if the command could not be written.
    */
   protected final synchronized void write(final Command command, final Object... args) throws IOException {
-    if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", new Object[] {id(), command, Arrays.toString(args)}); //$NON-NLS-1$
+    if (logger.isTraceEnabled()) logger.trace("{} -> {} {}", id(), command, Arrays.toString(args)); //$NON-NLS-1$
 
     ctx.comm.writeCommand(command);
     for (final Object arg : args) {

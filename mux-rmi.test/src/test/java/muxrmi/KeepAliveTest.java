@@ -342,7 +342,7 @@ public class KeepAliveTest extends RemoteTestBase {
           }
         }
         final long maxCommandInterval = task.getMaxCommandInterval();
-        logger.debug("SporadicTask({}) finished. MaxCommandInterval={}, SleepTimes={}", new Object[] {id, maxCommandInterval, sleepTimes});
+        logger.debug("SporadicTask({}) finished. MaxCommandInterval={}, SleepTimes={}", id, maxCommandInterval, sleepTimes);
         if (logger.isTraceEnabled()) {
           final RemoteServer.Statistics serverStats = server.getStatistics();
           logger.trace("Server connectionCount={}, threadCount={}", serverStats.connectionCount, serverStats.threadCount);
