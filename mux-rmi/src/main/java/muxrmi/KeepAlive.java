@@ -89,7 +89,7 @@ public class KeepAlive implements AutoCloseable {
      * @param reader
      */
     public Settings(final ConfigurationSettings.Reader reader) {
-      super(new WithPrefix("keep-alive", reader));
+      super(new WithPrefix("keep-alive.", reader));
       reload();
     }
     
