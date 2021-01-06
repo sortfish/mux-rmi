@@ -73,13 +73,13 @@ public class KeepAlive implements AutoCloseable {
    */
   public static class Settings extends ConfigurationSettings {
     /** The interval (in seconds) to send keep-alive packages. */
-    public final LongValue intervalSec = new LongValue("interval", 5);
+    public final LongValue intervalSec = new LongValue("interval", 10);
     
     /** The precision margin (in seconds) for keep-alive packages. A keep-alive package can be sent when there's less than this time left of an interval. */
     public final LongValue sendMarginSec = new LongValue("send-margin", 1);
     
     /** The precision margin (in seconds) for keep-alive packages. The connection is considered lost if the keep-alive interval is exceeded by this time. */
-    public final LongValue recvMarginSec = new LongValue("recv-margin", 5);
+    public final LongValue recvMarginSec = new LongValue("recv-margin", 30);
     
     /** The interval (in seconds) with which to run each keep-alive task. */
     public final LongValue pollIntervalSec = new LongValue("poll-interval", 1);
